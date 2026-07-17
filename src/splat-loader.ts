@@ -20,13 +20,15 @@ export type FlipAxis = "x" | "y" | "z";
 
 export interface SplatLoader {
   currentMesh: SplatMesh | null;
-  openFileDialog(): Promise<void>;
+  currentFilePath: string | null;
+  openFileDialog(): Promise<boolean>;
   flipModel(axis: FlipAxis): void;
 }
 
 export function setupSplatLoader(scene: THREE.Scene): SplatLoader {
   const loader: SplatLoader = {
     currentMesh: null,
+    currentFilePath: null,
     async openFileDialog() {
       const selected = await open({
         multiple: false,
@@ -38,9 +40,10 @@ export function setupSplatLoader(scene: THREE.Scene): SplatLoader {
         ],
       });
       if (!selected || Array.isArray(selected)) {
-        return;
+        return false;
       }
       await loadSplatFromPath(loader, scene, selected);
+      return true;
     },
     flipModel(axis: FlipAxis) {
       if (!loader.currentMesh) {
@@ -76,4 +79,5 @@ async function loadSplatFromPath(
 
   scene.add(mesh);
   loader.currentMesh = mesh;
+  loader.currentFilePath = path;
 }

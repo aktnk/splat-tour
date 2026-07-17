@@ -10,6 +10,7 @@ export interface AnnotationStore {
   add(input: Omit<Annotation, "id">): Annotation;
   update(id: string, patch: Partial<Omit<Annotation, "id">>): void;
   remove(id: string): void;
+  replaceAll(next: Annotation[]): void;
   subscribe(listener: AnnotationListener): () => void;
   exportToFile(): Promise<void>;
   importFromFile(): Promise<void>;
@@ -48,6 +49,10 @@ export function setupAnnotationStore(): AnnotationStore {
       annotations = annotations.filter((a) => a.id !== id);
       notify();
     },
+    replaceAll(next: Annotation[]) {
+      annotations = next;
+      notify();
+    },
     subscribe(listener: AnnotationListener) {
       listeners.add(listener);
       return () => {
@@ -73,8 +78,7 @@ export function setupAnnotationStore(): AnnotationStore {
       }
       const text = await readTextFile(selected);
       const parsed = JSON.parse(text) as Annotation[];
-      annotations = parsed;
-      notify();
+      store.replaceAll(parsed);
     },
   };
 

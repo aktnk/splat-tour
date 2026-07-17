@@ -9,6 +9,10 @@ import { setupRenderSettings } from "./render-settings";
 import { setupAnnotationStore } from "./annotation-store";
 import { setupAnnotationMode } from "./annotation-mode";
 import { setupAnnotationMarkers } from "./annotation-markers";
+import {
+  loadAnnotationsForFile,
+  saveAnnotationsForFile,
+} from "./annotation-persistence";
 
 const BASE_JOYSTICK_SPEED = 2.0;
 const CLICK_DRAG_THRESHOLD_PX = 6;
@@ -59,6 +63,25 @@ function init(): void {
   const annotationStore = setupAnnotationStore();
   const annotationMarkers = setupAnnotationMarkers(scene, annotationStore);
 
+  let sidecarExists = false;
+  let isLoadingAnnotations = false;
+
+  annotationStore.subscribe(() => {
+    if (isLoadingAnnotations) {
+      return;
+    }
+    const path = splatLoader.currentFilePath;
+    if (!path) {
+      return;
+    }
+    const all = annotationStore.getAll();
+    if (all.length === 0 && !sidecarExists) {
+      return;
+    }
+    sidecarExists = true;
+    void saveAnnotationsForFile(path, all);
+  });
+
   const SELECTED_COLOR = new THREE.Color("#ffd23c");
   const DEFAULT_COLOR = new THREE.Color("#ffffff");
   let selectedAnnotationId: string | null = null;
@@ -96,9 +119,22 @@ function init(): void {
   }
 
   openFileBtn.addEventListener("click", () => {
-    void splatLoader.openFileDialog().then(() => {
+    void splatLoader.openFileDialog().then(async (loaded) => {
+      if (!loaded) {
+        return;
+      }
       renderSettings.applyToCurrentMesh();
       resetFlipControls();
+      setSelectedAnnotation(null);
+      const path = splatLoader.currentFilePath;
+      isLoadingAnnotations = true;
+      try {
+        sidecarExists = path
+          ? await loadAnnotationsForFile(annotationStore, path)
+          : false;
+      } finally {
+        isLoadingAnnotations = false;
+      }
     });
   });
 
