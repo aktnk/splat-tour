@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>splat-tour</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="viewer-canvas"></canvas>
+
+    <div id="hud-overlay" class="hidden">
+      <div id="hud-center-dot"></div>
+      <div id="hud-crosshair">
+        <div class="hud-line hud-line-h"></div>
+        <div class="hud-line hud-line-v"></div>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <button id="open-file-btn">Open Splat File...</button>
+      <button id="hud-toggle-btn">HUD</button>
+      <button id="camera-settings-toggle-btn">Camera Settings</button>
+      <button id="render-settings-toggle-btn">Render Settings</button>
+      <button id="reset-view-btn">Reset View</button>
+      <div id="flip-controls">
+        <button data-axis="x">Flip X</button>
+        <button data-axis="y">Flip Y</button>
+        <button data-axis="z">Flip Z</button>
+      </div>
+    </div>
+
+    <div id="camera-settings-panel" class="settings-panel hidden">
+      <h2>Camera Settings</h2>
+      <label>
+        Move Speed
+        <input id="move-speed-range" type="range" min="0.1" max="3" step="0.05" value="1" />
+      </label>
+      <label>
+        Mouse Sensitivity
+        <input id="mouse-sensitivity-range" type="range" min="0.1" max="3" step="0.05" value="1" />
+      </label>
+      <label>
+        FOV
+        <input id="cam-fov" type="number" step="1" min="1" max="179" value="60" />
+      </label>
+    </div>
+
+    <div id="render-settings-panel" class="settings-panel hidden">
+      <h2>Render Settings</h2>
+      <label>
+        Exposure
+        <input id="exposure-range" type="range" min="0" max="3" step="0.05" value="1" />
+      </label>
+      <label>
+        Focal Adjustment (Splat Sharpness)
+        <input id="focal-distance-range" type="range" min="0.1" max="5" step="0.05" value="1" />
+      </label>
+    </div>
+
+    <div id="joystick-zone"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
