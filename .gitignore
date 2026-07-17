@@ -1,0 +1,38 @@
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# Tauri
+src-tauri/target/
+src-tauri/Cargo.lock.bak
+src-tauri/gen/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# 
+CLAUDE.md
+memo*.txt
