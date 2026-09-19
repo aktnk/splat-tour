@@ -37,3 +37,6 @@ Both attach their own `document` `keydown` listeners (each with its own `isFormE
 - `annotation-persistence.ts` — auto-persistence to a sidecar file `<splat path>.annotations.json` next to the opened splat. `main.ts` subscribes to the store and saves on every change (guarded by `isLoadingAnnotations` so loading doesn't trigger a save, and by `sidecarExists` so an empty store doesn't create a file). Writes are serialized through a promise chain.
 
 **Tauri side.** `src-tauri/src/lib.rs` registers the fs and dialog plugins and one command, `allow_sidecar_path`. The dialog plugin only grants fs scope to the exact file the user picked, so the sidecar path needs its own scope grant; the frontend calls `invoke("allow_sidecar_path")` before every sidecar read/write. New file access beyond this needs matching permissions in `src-tauri/capabilities/default.json`.
+
+## README.md
+Please read if you need more info: README.md
