@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-splat-tour is a Tauri v2 desktop app: a virtual-tour viewer for 3D Gaussian Splatting (3DGS) scenes where the user can place annotation icons at 3D positions. Stack: Vite + TypeScript, Three.js, `@sparkjsdev/spark` (3DGS renderer), nipplejs (touch joystick). The README is written in Japanese and tracks an implementation roadmap (next step: step 4, popup display in Explore mode; currently clicking an icon in Explore mode only `console.log`s the annotation).
+splat-tour is a Tauri v2 desktop app: a virtual-tour viewer for 3D Gaussian Splatting (3DGS) scenes where the user can place entrance icons at 3D positions. Hovering an icon shows an annotation (text + image); clicking it opens the configured content (another 3DGS, a 3D mesh, or a web URL). Stack: Vite + TypeScript, Three.js, `@sparkjsdev/spark` (3DGS renderer), nipplejs (touch joystick). The spec is `docs/spec/specification.md` (Japanese) and the README holds a progress checklist. The code so far implements only part of the spec: currently clicking an icon in Explore mode only `console.log`s the annotation.
+
+## Direction (spec vs. current code)
+
+Decided by the spec; the code has not caught up yet, so the Architecture section below describes the *current* code.
+- Storage moves to one SQLite3 database per project (replacing the sidecar JSON; no data migration needed). Editing UI moves to a left-side menu. Movement modes become walking (wall/ground collision) and drone.
+- Kept as 3DGS settings: camera settings (speed, sensitivity, FOV), render settings (exposure, focal adjustment), X/Y/Z flips, WASD/QE nudging of the selected icon.
+- **Still in the code but to be removed:** lock-on (`lockon-camera.ts`), HUD toggle, Reset View, JSON export/import in `annotation-store.ts`, and the sidecar persistence (`annotation-persistence.ts`, `allow_sidecar_path`). Don't extend these.
 
 ## Commands
 
@@ -38,5 +45,6 @@ Both attach their own `document` `keydown` listeners (each with its own `isFormE
 
 **Tauri side.** `src-tauri/src/lib.rs` registers the fs and dialog plugins and one command, `allow_sidecar_path`. The dialog plugin only grants fs scope to the exact file the user picked, so the sidecar path needs its own scope grant; the frontend calls `invoke("allow_sidecar_path")` before every sidecar read/write. New file access beyond this needs matching permissions in `src-tauri/capabilities/default.json`.
 
-## README.md
-Please read if you need more info: README.md
+## Spec / README
+- Feature spec: `docs/spec/specification.md`
+- Progress checklist and setup: README.md
