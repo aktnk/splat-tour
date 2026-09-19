@@ -33,6 +33,5 @@ desktop.ini
 .env.local
 .env.*.local
 
-# 
-CLAUDE.md
+# memo
 memo*.txt
