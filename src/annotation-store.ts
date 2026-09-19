@@ -1,5 +1,3 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { Annotation } from "./types";
 
 export type AnnotationListener = (annotations: Annotation[]) => void;
@@ -12,8 +10,6 @@ export interface AnnotationStore {
   remove(id: string): void;
   replaceAll(next: Annotation[]): void;
   subscribe(listener: AnnotationListener): () => void;
-  exportToFile(): Promise<void>;
-  importFromFile(): Promise<void>;
 }
 
 export function setupAnnotationStore(): AnnotationStore {
@@ -58,27 +54,6 @@ export function setupAnnotationStore(): AnnotationStore {
       return () => {
         listeners.delete(listener);
       };
-    },
-    async exportToFile() {
-      const path = await save({
-        filters: [{ name: "Annotations", extensions: ["json"] }],
-      });
-      if (!path) {
-        return;
-      }
-      await writeTextFile(path, JSON.stringify(annotations, null, 2));
-    },
-    async importFromFile() {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "Annotations", extensions: ["json"] }],
-      });
-      if (!selected || Array.isArray(selected)) {
-        return;
-      }
-      const text = await readTextFile(selected);
-      const parsed = JSON.parse(text) as Annotation[];
-      store.replaceAll(parsed);
     },
   };
 

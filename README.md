@@ -38,14 +38,6 @@ npm run tauri dev
 - [ ] 編集画面（左側メニュー）
 - [ ] SQLite保存（プロジェクト単位）
 
-### 廃止予定（コードから削除予定）
-
-- Lock-onモード
-- HUD（center dot / crosshair）の表示切り替え
-- Reset View
-- アノテーションのJSON export/import
-- `<ファイル名>.annotations.json` への自動保存（SQLiteに置き換え）
-
 ## License
 
 MIT License. See [LICENSE](./LICENSE) for details.

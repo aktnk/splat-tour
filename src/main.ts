@@ -2,17 +2,11 @@ import * as THREE from "three";
 import { setupScene } from "./scene";
 import { setupSplatLoader } from "./splat-loader";
 import { setupSparkControls, setupJoystick } from "./controls";
-import { setupLockOnCamera } from "./lockon-camera";
-import { setupHud } from "./hud";
 import { setupCameraSettings } from "./camera-settings";
 import { setupRenderSettings } from "./render-settings";
 import { setupAnnotationStore } from "./annotation-store";
 import { setupAnnotationMode } from "./annotation-mode";
 import { setupAnnotationMarkers } from "./annotation-markers";
-import {
-  loadAnnotationsForFile,
-  saveAnnotationsForFile,
-} from "./annotation-persistence";
 
 const BASE_JOYSTICK_SPEED = 2.0;
 const CLICK_DRAG_THRESHOLD_PX = 6;
@@ -45,9 +39,6 @@ function init(): void {
   const openFileBtn = document.getElementById(
     "open-file-btn",
   ) as HTMLButtonElement;
-  const resetViewBtn = document.getElementById(
-    "reset-view-btn",
-  ) as HTMLButtonElement;
   const flipControls = document.getElementById(
     "flip-controls",
   ) as HTMLElement;
@@ -56,31 +47,10 @@ function init(): void {
   const splatLoader = setupSplatLoader(scene);
   const controls = setupSparkControls(canvas);
   const joystick = setupJoystick(joystickZone);
-  const lockOnCamera = setupLockOnCamera(controls);
-  setupHud();
   setupCameraSettings(camera, controls.fpsMovement, controls.pointerControls);
   const renderSettings = setupRenderSettings(sparkRenderer, splatLoader);
   const annotationStore = setupAnnotationStore();
   const annotationMarkers = setupAnnotationMarkers(scene, annotationStore);
-
-  let sidecarExists = false;
-  let isLoadingAnnotations = false;
-
-  annotationStore.subscribe(() => {
-    if (isLoadingAnnotations) {
-      return;
-    }
-    const path = splatLoader.currentFilePath;
-    if (!path) {
-      return;
-    }
-    const all = annotationStore.getAll();
-    if (all.length === 0 && !sidecarExists) {
-      return;
-    }
-    sidecarExists = true;
-    void saveAnnotationsForFile(path, all);
-  });
 
   const SELECTED_COLOR = new THREE.Color("#ffd23c");
   const DEFAULT_COLOR = new THREE.Color("#ffffff");
@@ -107,9 +77,6 @@ function init(): void {
     setSelectedAnnotation(null);
   });
 
-  const initialPosition = camera.position.clone();
-  const initialQuaternion = camera.quaternion.clone();
-
   function resetFlipControls(): void {
     flipControls
       .querySelectorAll<HTMLButtonElement>("button[data-axis]")
@@ -119,22 +86,14 @@ function init(): void {
   }
 
   openFileBtn.addEventListener("click", () => {
-    void splatLoader.openFileDialog().then(async (loaded) => {
+    void splatLoader.openFileDialog().then((loaded) => {
       if (!loaded) {
         return;
       }
       renderSettings.applyToCurrentMesh();
       resetFlipControls();
       setSelectedAnnotation(null);
-      const path = splatLoader.currentFilePath;
-      isLoadingAnnotations = true;
-      try {
-        sidecarExists = path
-          ? await loadAnnotationsForFile(annotationStore, path)
-          : false;
-      } finally {
-        isLoadingAnnotations = false;
-      }
+      annotationStore.replaceAll([]);
     });
   });
 
@@ -283,34 +242,17 @@ function init(): void {
     });
   });
 
-  resetViewBtn.addEventListener("click", () => {
-    camera.position.copy(initialPosition);
-    camera.quaternion.copy(initialQuaternion);
-    controls.fpsMovement.keydown = {};
-    controls.fpsMovement.extraMove.set(0, 0, 0);
-    lockOnCamera.deactivate();
-    if (splatLoader.currentMesh) {
-      splatLoader.currentMesh.rotation.set(0, 0, 0);
-    }
-    resetFlipControls();
-    setSelectedAnnotation(null);
-  });
-
   function animate(): void {
     requestAnimationFrame(animate);
 
     const moveVector = joystick.getMoveVector();
-    const joystickSpeed =
-      BASE_JOYSTICK_SPEED *
-      (lockOnCamera.isActive() ? lockOnCamera.getSpeedScale() : 1);
     controls.fpsMovement.extraMove.set(
-      moveVector.x * joystickSpeed,
+      moveVector.x * BASE_JOYSTICK_SPEED,
       0,
-      -moveVector.y * joystickSpeed,
+      -moveVector.y * BASE_JOYSTICK_SPEED,
     );
 
     controls.update(camera);
-    lockOnCamera.update(camera);
 
     renderer.render(scene, camera);
   }
