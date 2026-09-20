@@ -9,6 +9,7 @@ splat-tour is a Tauri v2 desktop app: a virtual-tour viewer for 3D Gaussian Spla
 ## Direction (spec vs. current code)
 
 Decided by the spec; the code has not caught up yet, so the Architecture section below describes the *current* code.
+- The end product is a tour published on the web and viewed in browsers (PC and smartphone). This Tauri app becomes the authoring tool only; the viewer is a separate web build that shares the rendering/controls code, with Tauri-dependent parts (file dialog, `plugin-fs`) kept out of the shared code. Publishing = exporting the project as a static bundle (manifest JSON + assets, no SQLite); assets are referenced by relative path and resolved against a configurable base URL.
 - Storage moves to one SQLite3 database per project. Until that lands, annotations are in-memory only (lost on restart, cleared when another splat is opened). Editing UI moves to a left-side menu. Movement modes become walking (wall/ground collision) and drone.
 - Kept as 3DGS settings: camera settings (speed, sensitivity, FOV), render settings (exposure, focal adjustment), X/Y/Z flips, WASD/QE nudging of the selected icon.
 - Removed from the spec and the code: lock-on, HUD toggle, Reset View, annotation JSON export/import, sidecar JSON persistence. Don't reintroduce them.
