@@ -16,57 +16,6 @@ body {
   touch-action: none;
 }
 
-#hud-overlay {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-}
-
-#hud-overlay.hidden {
-  display: none;
-}
-
-#hud-center-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-}
-
-#hud-crosshair {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 24px;
-  height: 24px;
-  margin: -12px 0 0 -12px;
-}
-
-.hud-line {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.hud-line-h {
-  top: 50%;
-  left: 0;
-  width: 100%;
-  height: 1px;
-  margin-top: -0.5px;
-}
-
-.hud-line-v {
-  left: 50%;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  margin-left: -0.5px;
-}
-
 #toolbar {
   position: fixed;
   top: 12px;
