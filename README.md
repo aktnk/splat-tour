@@ -24,6 +24,10 @@ npm run tauri dev
 
 機能の詳細は [docs/spec/specification.md](./docs/spec/specification.md) を参照。
 
+## 読み込み検証（spike）
+
+実データを Web 公開向けに変換し、PC・スマホでの表示性能を計測する手順は [spike/README.md](./spike/README.md) を参照。
+
 ## 実装状況
 
 - [x] 3DGS読み込み（`.ply` / `.splat` / `.spz` / `.ksplat` / `.sog`）

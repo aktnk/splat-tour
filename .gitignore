@@ -35,3 +35,8 @@ desktop.ini
 
 # memo
 memo*.txt
+
+# Spike (large converted assets and tool caches stay local)
+spike/assets/*
+!spike/assets/.gitkeep
+tools/.cache/
