@@ -1,9 +1,12 @@
 import { defineConfig, type Plugin } from "vite";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // Dev server for the loading spike (spike/). Serves spike/assets/ as static
 // files and counts the bytes it sends for them, because Spark fetches streamed
 // chunks from Web Workers where the page's Resource Timing cannot see them.
+
+const resultsDir = fileURLToPath(new URL("./spike/results", import.meta.url));
 
 const ASSET_PATTERN = /\.(spz|rad|radc|ply|sog|glb)(\?|$)/i;
 
@@ -28,6 +31,23 @@ function byteCounter(): Plugin {
           requests = 0;
           rangeRequests = 0;
           res.end("ok");
+          return;
+        }
+        if (url.startsWith("/__spike/results") && req.method === "POST") {
+          let body = "";
+          req.setEncoding("utf8");
+          req.on("data", (chunk: string) => (body += chunk));
+          req.on("end", () => {
+            try {
+              const entry: unknown = JSON.parse(body);
+              mkdirSync(resultsDir, { recursive: true });
+              appendFileSync(`${resultsDir}/results.jsonl`, `${JSON.stringify(entry)}\n`);
+              res.end("ok");
+            } catch {
+              res.statusCode = 400;
+              res.end("invalid json");
+            }
+          });
           return;
         }
         if (!ASSET_PATTERN.test(url)) {
@@ -69,5 +89,7 @@ export default defineConfig({
   server: {
     port: 5180,
     host: true,
+    // Writing results or converted assets must not reload the page mid-run.
+    watch: { ignored: ["**/spike/results/**", "**/spike/assets/**"] },
   },
 });
