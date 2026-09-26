@@ -6,6 +6,7 @@ import {
   type Entrance,
   type Manifest,
   type Scene,
+  type Vec3,
   type View,
 } from "../core/manifest";
 import { setupScene } from "../scene";
@@ -19,6 +20,7 @@ import { setupMeshScreen } from "./mesh-screen";
 import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
 import { setupDebugPanel } from "./debug-panel";
+import { levelingRotation } from "./floor-align";
 
 // Composition root of the web viewer: loads the manifest, shows the start
 // scene and moves between scenes, the mesh screen and the web screen.
@@ -64,7 +66,12 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
   const splatView = setupSplatView(scene, camera, sparkRenderer);
   const markers = setupEntranceMarkers(splatView.root);
   const meshScreen = setupMeshScreen(canvas);
-  const debug = setupDebugPanel(debugEnabled);
+  const debug = setupDebugPanel(debugEnabled, {
+    onAlignStart: () => {
+      alignPoints = [];
+      debug.showAlignProgress(0);
+    },
+  });
   const raycaster = new THREE.Raycaster();
 
   let screen: Screen = "scene";
@@ -72,7 +79,8 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
   let busy = false;
   let loadStartedAt = 0;
   let loadingShown = false;
-  let lastActiveSplats = -1;
+  // Floor points collected by the debug panel's floor alignment, or null.
+  let alignPoints: Vec3[] | null = null;
   let lastDebugUpdate = 0;
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
@@ -93,7 +101,16 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
       }
       raycaster.setFromCamera(ndc, camera);
       const hit = raycaster.intersectObject(mesh, false)[0];
-      debug.showPoint(hit ? splatView.toLocal(hit.point) : null);
+      const point = hit ? splatView.toLocal(hit.point) : null;
+      debug.showPoint(point);
+      if (alignPoints && point) {
+        alignPoints.push(point);
+        debug.showAlignProgress(alignPoints.length);
+        if (alignPoints.length === 3) {
+          finishFloorAlign(alignPoints as [Vec3, Vec3, Vec3]);
+          alignPoints = null;
+        }
+      }
     },
     onChange: () => loop.invalidate(),
   });
@@ -104,10 +121,28 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
     controls.pointerControls.enable = enabled;
   }
 
+  function finishFloorAlign(points: [Vec3, Vec3, Vec3]): void {
+    const rotation = levelingRotation(points, splatView.toLocal(camera.position));
+    if (!rotation) {
+      debug.showAlignResult(null);
+      return;
+    }
+    // Keep the camera where it is in the scene while the scene turns under it.
+    const view = splatView.currentView();
+    splatView.setRotation(rotation);
+    splatView.applyView({ ...view, pitch: 0 });
+    const { scale } = current.transform;
+    debug.showAlignResult(
+      `"transform": ${JSON.stringify({ rotation, flipX: false, flipY: false, flipZ: false, scale })}`,
+    );
+    loop.invalidate();
+  }
+
   async function loadScene(sceneId: string, view: View): Promise<void> {
     busy = true;
     try {
       current = findScene(manifest, sceneId);
+      alignPoints = null;
       interaction.reset();
       markers.setEntrances([], 1);
       status.setTitles(manifest.title, current.title);
@@ -206,42 +241,52 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
       status.setLoading(false);
       loadingShown = false;
     }
-    const splatsChanged = sparkRenderer.activeSplats !== lastActiveSplats;
-    lastActiveSplats = sparkRenderer.activeSplats;
-    return moved || busy || loading || splatsChanged || splatView.isStreaming();
+    // activeSplats is not a change signal: the LoD varies it slightly on
+    // every sort, which would keep a still view rendering forever.
+    return moved || busy || loading || splatView.isStreaming();
   }
 
-  const loop = setupFrameLoop(
-    renderer,
-    defaultFrameLoopOptions(),
-    () => {
+  function updateDebug(force: boolean): void {
+    const now = performance.now();
+    if (!debug.enabled || (!force && now - lastDebugUpdate < DEBUG_UPDATE_MS)) {
+      return;
+    }
+    lastDebugUpdate = now;
+    debug.update({
+      sceneId: current.id,
+      view: splatView.currentView(),
+      fps: loop.getFps(),
+      activeSplats: sparkRenderer.activeSplats,
+      pixelRatio: renderer.getPixelRatio(),
+      sleeping: loop.isSleeping(),
+    });
+  }
+
+  const loop = setupFrameLoop(renderer, defaultFrameLoopOptions(), {
+    tick() {
       let changed = false;
       if (screen === "scene") {
         changed = tickScene();
       } else if (screen === "mesh") {
         changed = meshScreen.update();
       }
-      const now = performance.now();
-      if (debug.enabled && now - lastDebugUpdate > DEBUG_UPDATE_MS) {
-        lastDebugUpdate = now;
-        debug.update({
-          sceneId: current.id,
-          view: splatView.currentView(),
-          fps: loop.getFps(),
-          activeSplats: sparkRenderer.activeSplats,
-          pixelRatio: renderer.getPixelRatio(),
-        });
-      }
+      updateDebug(false);
       return changed;
     },
-    () => {
+    render() {
       if (screen === "mesh") {
         renderer.render(meshScreen.scene, meshScreen.camera);
       } else if (screen === "scene") {
         renderer.render(scene, camera);
       }
     },
-  );
+    onSleep: () => updateDebug(true),
+    // Spark's controls measure time since their last update; after a sleep
+    // that gap would turn a held key into a jump.
+    onWake: () => {
+      controls.sparkControls.lastTime = 0;
+    },
+  });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {

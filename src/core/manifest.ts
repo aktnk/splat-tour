@@ -4,7 +4,8 @@
 //
 // Coordinates: positions (entrance, view) are in the scene's local frame, i.e.
 // before the scene transform (flips, scale) is applied, so they stay valid when
-// the transform is corrected. yaw/pitch are in degrees in the world frame
+// the transform is corrected. The transform rotates by `rotation` (degrees,
+// XYZ Euler) with 180 added on each flipped axis. yaw/pitch are in degrees in the world frame
 // (yaw 0 looks along -Z, positive yaw turns left; positive pitch looks up).
 
 export const MANIFEST_VERSION = 1;
@@ -25,6 +26,8 @@ export interface SplatAsset {
 }
 
 export interface SceneTransform {
+  /** Rotation in degrees (XYZ Euler), e.g. to level a tilted capture. */
+  rotation: Vec3;
   flipX: boolean;
   flipY: boolean;
   flipZ: boolean;
@@ -194,6 +197,7 @@ function scene(value: unknown, path: string): Scene {
       paged: bool(splat.paged, `${path}.splat.paged`, splatUrl.toLowerCase().endsWith(".rad")),
     },
     transform: {
+      rotation: transform.rotation === undefined ? [0, 0, 0] : vec3(transform.rotation, `${path}.transform.rotation`),
       flipX: bool(transform.flipX, `${path}.transform.flipX`, false),
       flipY: bool(transform.flipY, `${path}.transform.flipY`, false),
       flipZ: bool(transform.flipZ, `${path}.transform.flipZ`, false),
