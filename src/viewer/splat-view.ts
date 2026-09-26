@@ -18,6 +18,8 @@ export interface SplatView {
   /** True while streamed chunks are being fetched or uploaded. */
   isStreaming(): boolean;
   applyView(view: View): void;
+  /** Overrides the scene rotation (degrees, XYZ Euler), e.g. to preview floor alignment. */
+  setRotation(degrees: Vec3): void;
   currentView(): View;
   toLocal(world: THREE.Vector3): Vec3;
 }
@@ -32,9 +34,18 @@ export function setupSplatView(
   let mesh: SplatMesh | null = null;
 
   function applyTransform(s: Scene): void {
-    const { flipX, flipY, flipZ, scale } = s.transform;
-    root.rotation.set(flipX ? Math.PI : 0, flipY ? Math.PI : 0, flipZ ? Math.PI : 0);
+    const { rotation, flipX, flipY, flipZ, scale } = s.transform;
+    setRotation([
+      rotation[0] + (flipX ? 180 : 0),
+      rotation[1] + (flipY ? 180 : 0),
+      rotation[2] + (flipZ ? 180 : 0),
+    ]);
     root.scale.setScalar(scale);
+    root.updateMatrixWorld(true);
+  }
+
+  function setRotation(degrees: Vec3): void {
+    root.rotation.set(degrees[0] * DEG, degrees[1] * DEG, degrees[2] * DEG, "XYZ");
     root.updateMatrixWorld(true);
   }
 
@@ -67,6 +78,7 @@ export function setupSplatView(
       const pager = sparkRenderer.pager;
       return pager !== undefined && (pager.fetchers.length > 0 || pager.fetched.length > 0);
     },
+    setRotation,
     applyView(v: View) {
       camera.position.copy(root.localToWorld(new THREE.Vector3(...v.position)));
       camera.quaternion.setFromEuler(new THREE.Euler(v.pitch * DEG, v.yaw * DEG, 0, "YXZ"));
