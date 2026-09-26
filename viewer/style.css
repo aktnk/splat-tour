@@ -1,0 +1,235 @@
+:root {
+  --panel-bg: rgba(18, 20, 26, 0.82);
+  --panel-fg: #f4f4f6;
+  --muted: #b8bcc6;
+  --accent: #2f6fe0;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--panel-fg);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#viewer-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+button {
+  font: inherit;
+  color: var(--panel-fg);
+  background: #2a2d36;
+  border: 1px solid #4a4e5a;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+#tour-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), transparent);
+  pointer-events: none;
+}
+
+#tour-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#scene-title {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+#loading {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--panel-bg);
+  border-radius: 999px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#error {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(480px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 16px;
+  background: #5a1d1d;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+#tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: min(280px, calc(100vw - 16px));
+  box-sizing: border-box;
+  padding: 12px;
+  background: var(--panel-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+#tooltip-image {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+#tooltip-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+#tooltip-description {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+#tooltip-open-btn {
+  width: 100%;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#web-screen {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 20;
+}
+
+#web-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+#screen-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: var(--panel-bg);
+  z-index: 30;
+}
+
+#screen-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+#open-external-link {
+  color: #9cc0ff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#joystick-zone {
+  position: fixed;
+  bottom: 32px;
+  left: 32px;
+  width: 120px;
+  height: 120px;
+  z-index: 5;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #joystick-zone {
+    display: none;
+  }
+}
+
+#debug-panel {
+  position: fixed;
+  top: 44px;
+  right: 8px;
+  width: min(340px, calc(100vw - 16px));
+  box-sizing: border-box;
+  padding: 8px;
+  background: var(--panel-bg);
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+}
+
+#debug-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--muted);
+}
+
+#debug-panel textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #333;
+  resize: none;
+}

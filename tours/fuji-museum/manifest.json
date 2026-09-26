@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "title": "富士山資料館バーチャルツアー",
+  "assetBaseUrl": "./assets/",
+  "startSceneId": "main-hall",
+  "scenes": [
+    {
+      "id": "main-hall",
+      "title": "展示場メイン",
+      "splat": { "url": "main-hall-sh1-lod.rad" },
+      "transform": { "flipX": false, "flipY": false, "flipZ": false, "scale": 1 },
+      "render": { "exposure": 1, "focalAdjustment": 1 },
+      "camera": { "moveSpeed": 1, "fov": 60 },
+      "initialView": { "position": [0, 0, 0], "yaw": 0, "pitch": 0 },
+      "entrances": [
+        {
+          "id": "doki",
+          "kind": "entrance",
+          "title": "土器",
+          "description": "展示されている土器の3Dモデルです。回転・拡大して観察できます。",
+          "position": [0, 0, -2],
+          "target": { "type": "mesh", "url": "doki-opt.glb" }
+        },
+        {
+          "id": "fuji-wikipedia",
+          "kind": "entrance",
+          "title": "富士山について（Web）",
+          "description": "Webページを表示するサンプルです。",
+          "position": [1, 0, -2],
+          "target": { "type": "url", "url": "https://ja.wikipedia.org/wiki/%E5%AF%8C%E5%A3%AB%E5%B1%B1" }
+        },
+        {
+          "id": "to-sub-hall",
+          "kind": "entrance",
+          "title": "展示場サブへ",
+          "description": "展示場サブに移動します（仮: データが揃うまで展示場メインと同じデータ）。",
+          "position": [-1, 0, -2],
+          "target": {
+            "type": "scene",
+            "sceneId": "sub-hall",
+            "arrival": { "position": [0, 0, 0], "yaw": 180, "pitch": 0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "sub-hall",
+      "title": "展示場サブ（仮）",
+      "splat": { "url": "main-hall-sh1-lod.rad" },
+      "initialView": { "position": [0, 0, 0], "yaw": 180, "pitch": 0 },
+      "entrances": [
+        {
+          "id": "to-main-hall",
+          "kind": "exit",
+          "title": "展示場メインへ戻る",
+          "description": "",
+          "position": [0, 0, 2],
+          "target": {
+            "type": "scene",
+            "sceneId": "main-hall",
+            "arrival": { "position": [0, 0, 0], "yaw": 0, "pitch": 0 }
+          }
+        }
+      ]
+    }
+  ]
+}

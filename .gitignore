@@ -36,6 +36,11 @@ desktop.ini
 # memo
 memo*.txt
 
+# Web viewer build and tour assets (large files are published separately)
+dist-viewer/
+tours/*/assets/*
+!tours/*/assets/.gitkeep
+
 # Spike (large converted assets and tool caches stay local)
 spike/assets/*
 !spike/assets/.gitkeep

@@ -24,6 +24,15 @@ npm run tauri dev
 
 機能の詳細は [docs/spec/specification.md](./docs/spec/specification.md) を参照。
 
+## Webビューア
+
+公開用のWebビューア（`viewer/`）とツアーデータ（`tours/`）の使い方・manifest の書き方・公開方法は [tours/README.md](./tours/README.md) を参照。
+
+```bash
+npm run viewer:dev      # http://localhost:5190（tours/fuji-museum を表示）
+npm run viewer:build    # dist-viewer/ に公開用ビルド
+```
+
 ## 読み込み検証（spike）
 
 実データを Web 公開向けに変換し、PC・スマホでの表示性能を計測する手順は [spike/README.md](./spike/README.md) を参照。
@@ -32,18 +41,21 @@ npm run tauri dev
 
 - [x] 3DGS読み込み（`.ply` / `.splat` / `.spz` / `.ksplat` / `.sog`）
 - [x] 視点回転、WASD + マウスルック、タッチジョイスティック
-- [ ] 矢印キー移動、PC向け疑似マウスパッド
+- [x] 矢印キー移動
+- [ ] PC向け疑似マウスパッド
 - [ ] 歩行モード（壁・地面）/ ドローンモード
 - [x] 3DGS設定UI: 露出、Focal Adjustment、軸フリップ、カメラ設定（速度・感度・FOV）
 - [ ] 最初の表示位置・向き・大きさの指定と保存
 - [x] アイコン配置・選択・再配置・WASD/QE微調整
-- [ ] アイコンのホバー表示（テキスト＋画像）
-- [ ] 入口の遷移先設定と遷移（3DGS / 3Dメッシュ / WebURL）、メッシュ・Web表示画面、「戻る」「終了」
-- [ ] 3DGS間の遷移（入口ごとの到着位置・向き、遷移先の「出口」）
+- [x] アイコンのホバー表示（テキスト＋画像）※Webビューア。スマホはタップ
+- [x] 入口の遷移（3DGS / 3Dメッシュ / WebURL）、メッシュ・Web表示画面、「戻る」「終了」※Webビューア。遷移先の設定は manifest の手書き
+- [ ] 入口の遷移先を編集画面で設定
+- [x] 3DGS間の遷移（入口ごとの到着位置・向き、遷移先の「出口」）※Webビューア
 - [ ] 編集画面（左側メニュー）
 - [ ] SQLite保存（プロジェクト単位）
 - [ ] 静的バンドルの書き出し
-- [ ] Webビューア（ブラウザ動作、Tauri API非依存）
+- [x] Webビューア（ブラウザ動作、Tauri API非依存、スマホの発熱対策）
+- [x] 公開データ形式の決定（3DGS: RAD SH1 ストリーミング、3Dモデル: 最適化 GLB）
 
 ## License
 
