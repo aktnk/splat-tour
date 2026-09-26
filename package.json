@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "spike:convert": "node tools/spike/convert.mjs",
+    "spike:dev": "vite --config vite.spike.config.ts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.0.0",

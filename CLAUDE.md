@@ -20,8 +20,12 @@ Decided by the spec; the code has not caught up yet, so the Architecture section
 npm install
 npm run tauri dev     # full app (starts Vite on fixed port 1420 via beforeDevCommand)
 npm run dev           # frontend only in a browser — Tauri APIs (file dialog, fs, invoke) will not work
-npm run build         # `tsc && vite build`; tsc is the only static check
+npm run build         # `tsc && vite build`; tsc is the only static check (covers src/ and spike/)
+npm run spike:convert -- <file.ply|file.glb> --name <scene>   # loading spike: convert into spike/assets/
+npm run spike:dev     # loading spike viewer on port 5180 (LAN-exposed, counts bytes served)
 ```
+
+`spike/` is a throwaway measurement viewer for deciding the web asset format (SPZ vs streamed LoD `.rad`, GLB optimization) on real phones; see `spike/README.md`. It reuses `src/scene.ts` and `src/controls.ts`, so keep those free of Tauri imports. Converted assets under `spike/assets/` are gitignored. Spark 2.1 reads SPZ only up to v3, so SPZ output must be written with `--spz-version 3`.
 
 There is no test runner and no linter configured. `tsconfig.json` is strict with `noUnusedLocals`/`noUnusedParameters`, so unused imports or variables fail `npm run build`.
 
