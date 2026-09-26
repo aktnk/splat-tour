@@ -13,6 +13,9 @@ import { setupJoystick, setupSparkControls } from "../src/controls";
 const BASE_JOYSTICK_SPEED = 2.0;
 const FRAME_WINDOW_MS = 5000;
 const STATS_POLL_MS = 500;
+// Seconds after a load starts at which a snapshot is saved automatically, so
+// a run that ends in a browser crash still leaves its earlier numbers behind.
+const AUTO_RECORD_SECONDS = [3, 10, 30];
 
 interface Variant {
   scene: string;
@@ -117,6 +120,7 @@ async function init(): Promise<void> {
   const frames: { time: number; duration: number }[] = [];
   let lastFrameTime: number | null = null;
   const results: unknown[] = [];
+  let autoRecordTimers: ReturnType<typeof setTimeout>[] = [];
 
   function selectedVariant(): Variant | undefined {
     return variants[Number(variantSelect.value)];
@@ -191,6 +195,10 @@ async function init(): Promise<void> {
       return;
     }
     unloadCurrent();
+    for (const timer of autoRecordTimers) clearTimeout(timer);
+    autoRecordTimers = AUTO_RECORD_SECONDS.map((sec) =>
+      setTimeout(() => record(`auto-${sec}s`), sec * 1000),
+    );
     await fetch("/__spike/reset", { method: "POST" }).catch(() => undefined);
     frames.length = 0;
     camera.position.set(0, 0, 0);
@@ -325,11 +333,22 @@ async function init(): Promise<void> {
     }
   });
 
-  recordBtn.addEventListener("click", () => {
-    results.push({ device, ...snapshot(), recordedAt: new Date().toISOString() });
+  // Each record is also sent to the dev server, which appends it to
+  // spike/results/results.jsonl on the PC, so phones need no copy and paste.
+  function record(trigger: string): void {
+    const entry = { trigger, device, ...snapshot(), recordedAt: new Date().toISOString() };
+    results.push(entry);
     resultsEl.value = JSON.stringify(results, null, 2);
     resultsEl.scrollTop = resultsEl.scrollHeight;
-  });
+    void fetch("/__spike/results", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+      keepalive: true,
+    }).catch(() => undefined);
+  }
+
+  recordBtn.addEventListener("click", () => record("manual"));
 
   copyBtn.addEventListener("click", () => {
     // navigator.clipboard only exists in secure contexts; a phone opening the
