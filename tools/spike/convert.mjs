@@ -2,10 +2,11 @@
 // Converts a 3DGS PLY or a GLB into the variants measured by the spike viewer
 // and records them in spike/assets/variants.json.
 //
-//   node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--skip-spz] [--skip-rad]
+//   node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]
 //
 // PLY -> <scene>-sh{N}.spz        (splat-transform, SPZ v3: Spark 2.1 cannot read v4)
 //     -> <scene>-sh{N}-lod.rad    (Spark build-lod --quality, streamable with paged: true)
+//     -> <scene>-sh{N}-csplat-lod.rad  (same, with build-lod's compact --csplat encoding)
 // GLB -> <scene>-orig.glb         (copy of the input, for comparison)
 //     -> <scene>-opt.glb          (gltf-transform optimize: meshopt + WebP textures)
 
@@ -28,6 +29,13 @@ const SPLAT_TRANSFORM = "@playcanvas/splat-transform@3.6.6";
 const GLTF_TRANSFORM = "@gltf-transform/cli@4.5.0";
 const SPARK_TAG = "v2.1.0";
 
+// build-lod splat encodings: gsplat is its higher-precision default, csplat
+// the compact one. gsplat keeps the original file names.
+const RAD_ENCODINGS = {
+  gsplat: { suffix: "", flag: "--gsplat", label: "" },
+  csplat: { suffix: "-csplat", flag: "--csplat", label: "・csplat" },
+};
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const assetsDir = join(repoRoot, "spike/assets");
 const cacheDir = join(repoRoot, "tools/.cache");
@@ -35,11 +43,12 @@ const variantsPath = join(assetsDir, "variants.json");
 const isWindows = process.platform === "win32";
 
 function parseArgs(argv) {
-  const opts = { input: null, name: null, sh: [3, 1], skipSpz: false, skipRad: false };
+  const opts = { input: null, name: null, sh: [3, 1], radEncodings: ["gsplat", "csplat"], skipSpz: false, skipRad: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--name") opts.name = argv[++i];
     else if (arg === "--sh") opts.sh = argv[++i].split(",").map(Number);
+    else if (arg === "--rad-encoding") opts.radEncodings = argv[++i].split(",");
     else if (arg === "--skip-spz") opts.skipSpz = true;
     else if (arg === "--skip-rad") opts.skipRad = true;
     else if (!arg.startsWith("--") && !opts.input) opts.input = arg;
@@ -47,11 +56,14 @@ function parseArgs(argv) {
   }
   if (!opts.input) {
     throw new Error(
-      "Usage: node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--skip-spz] [--skip-rad]",
+      "Usage: node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]",
     );
   }
   if (opts.sh.some((n) => !Number.isInteger(n) || n < 0 || n > 3)) {
     throw new Error("--sh takes SH degrees 0..3, e.g. --sh 3,1");
+  }
+  if (opts.radEncodings.some((e) => !RAD_ENCODINGS[e])) {
+    throw new Error("--rad-encoding takes gsplat and/or csplat, e.g. --rad-encoding csplat");
   }
   return opts;
 }
@@ -142,10 +154,15 @@ function convertPly(input, scene, opts) {
         copyFileSync(input, workInput);
       }
       for (const sh of opts.sh) {
-        const file = `${scene}-sh${sh}-lod.rad`;
-        const seconds = run(buildLod, ["--quality", `--max-sh=${sh}`, "--rad", workInput]);
-        moveFile(join(workDir, `${scene}-lod.rad`), join(assetsDir, file));
-        added.push(variant(scene, file, `RAD SH${sh}（LoD・ストリーミング）`, "splat", seconds, { paged: true }));
+        for (const encoding of opts.radEncodings) {
+          const { suffix, flag, label } = RAD_ENCODINGS[encoding];
+          const file = `${scene}-sh${sh}${suffix}-lod.rad`;
+          const seconds = run(buildLod, ["--quality", flag, `--max-sh=${sh}`, "--rad", workInput]);
+          moveFile(join(workDir, `${scene}-lod.rad`), join(assetsDir, file));
+          added.push(
+            variant(scene, file, `RAD SH${sh}${label}（LoD・ストリーミング）`, "splat", seconds, { paged: true }),
+          );
+        }
       }
       rmSync(workInput, { force: true });
     }

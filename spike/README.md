@@ -10,6 +10,7 @@
 |---|---|---|
 | `<名前>-sh3.spz` / `-sh1.spz` | splat-transform で SPZ に圧縮。SH（見る角度による色の変化）の次数を 3 / 1 にしたもの | 全体をダウンロードしてから表示 |
 | `<名前>-sh3-lod.rad` / `-sh1-lod.rad` | Spark の build-lod で LoD（詳細度の階層）を事前計算 | 粗い全体を先に表示し、近くの詳細を順次ストリーミング（`paged`） |
+| `<名前>-sh3-csplat-lod.rad` / `-sh1-csplat-lod.rad` | 上と同じ。ただし build-lod の軽い保存形式（`--csplat`）を使う。サイズ・メモリは減るが、精度が下がる可能性がある | 同上 |
 | `<名前>-orig.glb` / `-opt.glb` | GLB の元ファイルと、gltf-transform で最適化（meshopt 圧縮 + WebP テクスチャ）したもの | 全体をダウンロードしてから表示 |
 
 SPZ でも「読み込み時にLoD生成（lod: true）」にチェックを入れると、ブラウザ側で LoD を作ってから表示します。事前計算（RAD）との比較用です。
@@ -33,6 +34,7 @@ npm run spike:convert -- "/path/to/dogu.glb" --name dogu
 
 - `--name` は表示用の名前です（ファイル名にも使います）。
 - `--sh 3,1` で作る SH 次数を指定できます（既定は 3 と 1）。
+- `--rad-encoding gsplat,csplat` で作る RAD の保存形式を指定できます（既定は両方）。`gsplat` は高精度（従来どおり）、`csplat` は軽量です。
 - `--skip-spz` / `--skip-rad` で片方だけ作れます。
 - 変換結果のサイズと所要時間は `spike/assets/variants.json` に記録されます。500MB 級の PLY では、RAD の変換に時間がかかることがあります。
 
