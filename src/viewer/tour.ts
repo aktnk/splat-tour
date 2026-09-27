@@ -9,8 +9,8 @@ import {
   type Vec3,
   type View,
 } from "../core/manifest";
-import { setupScene } from "../scene";
-import { setupJoystick, setupSparkControls } from "../controls";
+import { setupScene } from "./scene";
+import { setupJoystick, setupSparkControls } from "./controls";
 import { defaultFrameLoopOptions, setupFrameLoop } from "./frame-loop";
 import { setupSplatView } from "./splat-view";
 import { setupEntranceMarkers } from "./entrance-markers";
@@ -25,7 +25,7 @@ import { assertAssetAvailable } from "./asset-check";
 
 // Composition root of the web viewer: loads the manifest, shows the start
 // scene and moves between scenes, the mesh screen and the web screen.
-// No Tauri APIs here, so the same code can run as the editor's preview.
+// No desktop-only APIs here, so an editor can reuse the same code as its preview.
 
 const BASE_JOYSTICK_SPEED = 2.0;
 // Hide the loading indicator even if the initial view shows no splats.

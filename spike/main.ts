@@ -3,8 +3,8 @@ import { SplatMesh } from "@sparkjsdev/spark";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import { setupScene } from "../src/scene";
-import { setupJoystick, setupSparkControls } from "../src/controls";
+import { setupScene } from "../src/viewer/scene";
+import { setupJoystick, setupSparkControls } from "../src/viewer/controls";
 
 // Loading spike: loads one converted variant at a time (see
 // tools/spike/convert.mjs) and shows load time, transferred bytes, frame rate
