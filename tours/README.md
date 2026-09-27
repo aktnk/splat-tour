@@ -29,6 +29,30 @@ tours/sample/
    - PC: http://localhost:5190
    - スマホ: 同じ Wi-Fi で `http://<PCのIP>:5190`（ターミナルに表示される Network の URL）
    - 別のツアーを開くとき: `TOUR_DIR=tours/<名前> npm run viewer:dev`
+   - 特定のシーンから開くとき: `?scene=<シーンのid>`（例: `?debug=1&scene=main-hall`）。「終了」は `startSceneId` に戻ります
+
+## シーンを追加する（例: 建物周辺 → 展示場メイン）
+
+1. PLY を変換してアセットに置きます（ツアーに使うのは RAD SH1 だけです）。
+
+   ```bash
+   npm run spike:convert -- "/path/to/exterior.ply" --name exterior --sh 1 --rad-encoding gsplat --skip-spz
+   cp spike/assets/exterior-sh1-lod.rad tours/sample/assets/
+   ```
+
+2. manifest にシーンを足し、行き来する入口・出口を両方のシーンに置きます。サンプルの `tours/sample/manifest.json` には、建物周辺（`exterior`）から展示場メインへの入口「建物に入る」と、展示場メインから外へ戻る出口「外に出る」が入っています。座標は仮の値です。
+3. `?debug=1` で座標を調べて、仮の値を置き換えます。
+
+   | 調べるもの | 開くシーン | やること |
+   |---|---|---|
+   | 建物周辺の `transform` | `?debug=1&scene=exterior` | 床合わせ |
+   | 建物周辺の `initialView` | 同上 | ツアーを始めたい場所に立ち、「現在の視点」をコピー |
+   | 入口「建物に入る」の `position` | 同上 | 建物の入口（扉）をクリック |
+   | 外に出たときの `arrival` | 同上 | 入口の前に立ち、建物から離れる向きを向いて「現在の視点」をコピー |
+   | 中に入ったときの `arrival` | `?debug=1&scene=main-hall` | 展示場の入口の内側に立ち、中を向いて「現在の視点」をコピー |
+   | 出口「外に出る」の `position` | 同上 | 展示場の出入口をクリック |
+
+   屋外は屋内より広いので、`camera.moveSpeed` を大きめ（サンプルでは 2）にしています。
 
 ## 操作
 

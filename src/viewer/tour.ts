@@ -37,6 +37,8 @@ export interface TourOptions {
   canvas: HTMLCanvasElement;
   manifestUrl: string;
   debug: boolean;
+  /** Scene to open instead of startSceneId (authoring aid); "終了" still goes to the start. */
+  startSceneId?: string;
 }
 
 async function fetchManifest(url: string): Promise<Manifest> {
@@ -47,7 +49,12 @@ async function fetchManifest(url: string): Promise<Manifest> {
   return parseManifest(await response.json());
 }
 
-export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: TourOptions): Promise<void> {
+export async function startTour({
+  canvas,
+  manifestUrl,
+  debug: debugEnabled,
+  startSceneId,
+}: TourOptions): Promise<void> {
   const status = setupStatusOverlay();
   const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href;
   let manifest: Manifest;
@@ -75,7 +82,13 @@ export async function startTour({ canvas, manifestUrl, debug: debugEnabled }: To
   const raycaster = new THREE.Raycaster();
 
   let screen: Screen = "scene";
-  let current: Scene = findScene(manifest, manifest.startSceneId);
+  let current: Scene;
+  try {
+    current = findScene(manifest, startSceneId ?? manifest.startSceneId);
+  } catch (err) {
+    status.showError(err instanceof Error ? err.message : String(err));
+    return;
+  }
   let busy = false;
   let loadStartedAt = 0;
   let loadingShown = false;
