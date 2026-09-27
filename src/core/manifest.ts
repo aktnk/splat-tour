@@ -1,6 +1,7 @@
 // Tour manifest: the published description of a tour (scenes, entrances and
 // their targets). The web viewer reads it with fetch; the editor will export it.
-// Plain data and validation only: no DOM, Three.js or Tauri here.
+// Plain data and validation only: no DOM or Three.js here, so an editor can
+// share it.
 //
 // Coordinates: positions (entrance, view) are in the scene's local frame, i.e.
 // before the scene transform (flips, scale) is applied, so they stay valid when

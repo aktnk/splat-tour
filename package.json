@@ -2,28 +2,29 @@
   "name": "splat-tour",
   "private": true,
   "version": "0.1.0",
+  "description": "Web viewer for 3D Gaussian Splatting virtual tours, driven by a manifest JSON",
+  "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": "./src/viewer/index.ts",
+    "./manifest": "./src/core/manifest.ts"
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "spike:convert": "node tools/spike/convert.mjs",
-    "spike:dev": "vite --config vite.spike.config.ts",
+    "dev": "vite --config vite.viewer.config.ts",
+    "build": "tsc && vite build --config vite.viewer.config.ts",
+    "preview": "vite preview --config vite.viewer.config.ts",
     "viewer:dev": "vite --config vite.viewer.config.ts",
     "viewer:build": "tsc && vite build --config vite.viewer.config.ts",
-    "tour:bundle": "node tools/publish/bundle.mjs"
+    "tour:bundle": "node tools/publish/bundle.mjs",
+    "spike:convert": "node tools/spike/convert.mjs",
+    "spike:dev": "vite --config vite.spike.config.ts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.0.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-fs": "^2",
     "nipplejs": "^0.10.2",
     "three": "^0.180.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
     "@types/three": "^0.180.0",
     "typescript": "^5.6.2",
     "vite": "^6.0.3"

@@ -1,38 +1,42 @@
 # splat-tour
 
-3D Gaussian Splatting（3DGS）空間を自由に移動しながら、任意の座標に入口アイコンを配置できるバーチャルツアー・ビューア。アイコンにマウスオーバーすると解説（テキスト・画像）を表示し、クリックすると別の3DGS・3Dモデル・Webページへ移動できる。
+3D Gaussian Splatting（3DGS）で撮影した空間を、ブラウザ（PC・スマートフォン）で歩き回れるバーチャルツアーのWebビューアです。空間内に置いた入口アイコンにマウスを乗せる（スマホではタップする）と解説（テキスト・画像）が表示され、開くと別の3DGS・3Dモデル・Webページへ移動できます。
 
-[try-spark](https://github.com/aktnk/try-spark) での実装経験をもとに、ゼロから再実装しているTauriデスクトップアプリケーションです。このアプリはツアーの制作ツールで、作成したツアーはWeb上で公開し、PC・スマートフォンのブラウザで体験できるようにする予定です。
+ツアーの内容は `manifest.json`（JSON）に書きます。このリポジトリには、ビューアのほか、manifest を手で書くための補助（座標の表示・床合わせ）、3DGS や 3Dモデルの変換、公開用フォルダの作成の道具が入っています。GUI で manifest を作る制作ツールは、別のプロジェクトで開発しています。
+
+[try-spark](https://github.com/aktnk/try-spark) での実装経験をもとに、ゼロから再実装しています。
 
 ## 技術スタック
 
-- Tauri v2
 - Vite + TypeScript
 - Three.js
 - [@sparkjsdev/spark](https://sparkjs.dev/)（3DGSレンダラー）
 - nipplejs（タッチ操作用バーチャルジョイスティック）
-- SQLite3（編集情報の保存）
 
-## セットアップ
+## セットアップと起動
 
 ```bash
 npm install
-npm run tauri dev
+cp tours/sample/manifest_sample.json tours/sample/manifest.json   # 初回だけ（manifest.json は git に入らない）
+npm run dev             # http://localhost:5190（tours/sample を表示。?debug=1 で座標表示）
+npm run build           # 型チェックと dist-viewer/ への公開用ビルド
+npm run tour:bundle     # ビューア + manifest + 使っているアセットを dist-publish/ にまとめる
+```
+
+manifest の書き方、座標の調べ方、アセットの変換、公開方法は [tours/README.md](./tours/README.md) を参照してください。
+
+## 他のプロジェクトから使う
+
+ビューアの部品と manifest の型・検証は、パッケージとして読み込めます（TypeScript のソースのまま提供しているので、Vite などのバンドラーで使ってください）。
+
+```ts
+import { startTour, setupScene } from "splat-tour";
+import { parseManifest, type Manifest } from "splat-tour/manifest";
 ```
 
 ## 仕様
 
 機能の詳細は [docs/spec/specification.md](./docs/spec/specification.md) を参照。
-
-## Webビューア
-
-公開用のWebビューア（`viewer/`）とツアーデータ（`tours/`）の使い方・manifest の書き方・公開方法は [tours/README.md](./tours/README.md) を参照。
-
-```bash
-cp tours/sample/manifest_sample.json tours/sample/manifest.json   # 初回だけ（manifest.json は git に入らない）
-npm run viewer:dev      # http://localhost:5190（tours/sample を表示）
-npm run viewer:build    # dist-viewer/ に公開用ビルド
-```
 
 ## 読み込み検証（spike）
 
@@ -40,23 +44,18 @@ npm run viewer:build    # dist-viewer/ に公開用ビルド
 
 ## 実装状況
 
-- [x] 3DGS読み込み（`.ply` / `.splat` / `.spz` / `.ksplat` / `.sog`）
-- [x] 視点回転、WASD + マウスルック、タッチジョイスティック
-- [x] 矢印キー移動
+- [x] 3DGS の表示（LoD ストリーミングの `.rad` のほか `.ply` / `.spz` / `.splat` / `.ksplat` / `.sog`）
+- [x] 視点回転、WASD / 矢印キー + マウスルック、タッチジョイスティック（画面回転に対応）
 - [ ] PC向け疑似マウスパッド
 - [ ] 歩行モード（壁・地面）/ ドローンモード
-- [x] 3DGS設定UI: 露出、Focal Adjustment、軸フリップ、カメラ設定（速度・感度・FOV）
-- [ ] 最初の表示位置・向き・大きさの指定と保存
-- [x] アイコン配置・選択・再配置・WASD/QE微調整
-- [x] アイコンのホバー表示（テキスト＋画像）※Webビューア。スマホはタップ
-- [x] 入口の遷移（3DGS / 3Dメッシュ / WebURL）、メッシュ・Web表示画面、「戻る」「終了」※Webビューア。遷移先の設定は manifest の手書き
-- [ ] 入口の遷移先を編集画面で設定
-- [x] 3DGS間の遷移（入口ごとの到着位置・向き、遷移先の「出口」）※Webビューア
-- [ ] 編集画面（左側メニュー）
-- [ ] SQLite保存（プロジェクト単位）
-- [ ] 静的バンドルの書き出し
-- [x] Webビューア（ブラウザ動作、Tauri API非依存、スマホの発熱対策）
-- [x] 公開データ形式の決定（3DGS: RAD SH1 ストリーミング、3Dモデル: 最適化 GLB）
+- [x] シーンごとの設定：回転補正（床合わせ）、大きさ、露出、Focal Adjustment、移動速度、FOV、最初の表示位置・向き、移動できる範囲
+- [x] 入口アイコン（コイン型、壁で隠れる）とホバー表示（テキスト＋画像）。スマホはタップ
+- [x] 入口の遷移（3DGS / 3Dメッシュ / WebURL）、メッシュ・Web表示画面、「戻る」「終了」「初期位置」
+- [x] 3DGS間の遷移（入口ごとの到着位置・向き、遷移先の「出口」）
+- [x] スマホの発熱対策（静止時は描画・処理を停止、30fps・解像度 1.5 倍上限）
+- [x] manifest の手書き補助（`?debug=1` の座標表示・床合わせ、`?scene=` で任意のシーンから開く）
+- [x] 公開データ形式の決定（3DGS: RAD SH1 ストリーミング、3Dモデル: 最適化 GLB）と変換ツール
+- [x] 公開用フォルダの作成（Cloudflare Pages 向け、RAD の分割）
 
 ## License
 
