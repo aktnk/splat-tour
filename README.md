@@ -34,6 +34,13 @@ import { startTour, setupScene } from "splat-tour";
 import { parseManifest, type Manifest } from "splat-tour/manifest";
 ```
 
+`startTour()` は、ビューアの画面の部品（`viewer/index.html` の要素）が id で見つかることを前提にしています。同じ画面を別のアプリの中に作るときは、HTML と CSS も読み込めます（Vite の場合）。
+
+```ts
+import "splat-tour/viewer.css";
+import viewerHtml from "splat-tour/viewer.html?raw"; // <body> の中身を自分のページに入れる（<script> は除く）
+```
+
 ## 仕様
 
 機能の詳細は [docs/spec/specification.md](./docs/spec/specification.md) を参照。

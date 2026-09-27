@@ -7,7 +7,9 @@
   "type": "module",
   "exports": {
     ".": "./src/viewer/index.ts",
-    "./manifest": "./src/core/manifest.ts"
+    "./manifest": "./src/core/manifest.ts",
+    "./viewer.html": "./viewer/index.html",
+    "./viewer.css": "./viewer/style.css"
   },
   "scripts": {
     "dev": "vite --config vite.viewer.config.ts",
@@ -20,7 +22,7 @@
     "spike:dev": "vite --config vite.spike.config.ts"
   },
   "dependencies": {
-    "@sparkjsdev/spark": "^2.0.0",
+    "@sparkjsdev/spark": "~2.1.0",
     "nipplejs": "^0.10.2",
     "three": "^0.180.0"
   },
