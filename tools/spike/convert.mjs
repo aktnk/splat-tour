@@ -2,11 +2,14 @@
 // Converts a 3DGS file (PLY, SOG, SPZ, ...) or a GLB into the variants measured
 // by the spike viewer and records them in spike/assets/variants.json.
 //
-//   node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]
+//   node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--skip-spz] [--skip-rad]
 //
 // 3DGS -> <scene>-sh{N}.spz        (splat-transform, SPZ v3: Spark 2.1 cannot read v4)
 //      -> <scene>-sh{N}-lod.rad    (Spark build-lod --quality, streamable with paged: true)
 //      -> <scene>-sh{N}-csplat-lod.rad  (same, with build-lod's compact --csplat encoding)
+//
+// --crop-sphere / --crop-box keep only the splats inside, in the input file's
+// coordinates (= the viewer's ?debug=1 click coordinates, before transform).
 // GLB  -> <scene>-orig.glb         (copy of the input, for comparison)
 //      -> <scene>-opt.glb          (gltf-transform optimize: meshopt + WebP textures)
 
@@ -52,13 +55,36 @@ const cacheDir = join(repoRoot, "tools/.cache");
 const variantsPath = join(assetsDir, "variants.json");
 const isWindows = process.platform === "win32";
 
+function numbers(value, count, flag) {
+  const list = (value ?? "").split(",").map(Number);
+  if (list.length !== count || list.some((n) => !Number.isFinite(n))) {
+    throw new Error(`${flag} takes ${count} comma-separated numbers`);
+  }
+  return list;
+}
+
+// Crop arguments for each tool. A box is normalized so either corner order works.
+function cropArgs(crop) {
+  if (!crop) return { splatTransform: [], buildLod: [] };
+  if (crop.kind === "sphere") {
+    const v = crop.values.join(",");
+    return { splatTransform: ["-S", v], buildLod: [`--within-dist=${v}`] };
+  }
+  const [x1, y1, z1, x2, y2, z2] = crop.values;
+  const min = [Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2)].join(",");
+  const max = [Math.max(x1, x2), Math.max(y1, y2), Math.max(z1, z2)].join(",");
+  return { splatTransform: ["-B", `${min},${max}`], buildLod: [`--min-box=${min}`, `--max-box=${max}`] };
+}
+
 function parseArgs(argv) {
-  const opts = { input: null, name: null, sh: [3, 1], radEncodings: ["gsplat", "csplat"], skipSpz: false, skipRad: false };
+  const opts = { input: null, name: null, sh: [3, 1], radEncodings: ["gsplat", "csplat"], crop: null, skipSpz: false, skipRad: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--name") opts.name = argv[++i];
     else if (arg === "--sh") opts.sh = argv[++i].split(",").map(Number);
     else if (arg === "--rad-encoding") opts.radEncodings = argv[++i].split(",");
+    else if (arg === "--crop-sphere") opts.crop = { kind: "sphere", values: numbers(argv[++i], 4, arg) };
+    else if (arg === "--crop-box") opts.crop = { kind: "box", values: numbers(argv[++i], 6, arg) };
     else if (arg === "--skip-spz") opts.skipSpz = true;
     else if (arg === "--skip-rad") opts.skipRad = true;
     else if (!arg.startsWith("--") && !opts.input) opts.input = arg;
@@ -66,7 +92,7 @@ function parseArgs(argv) {
   }
   if (!opts.input) {
     throw new Error(
-      "Usage: node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]",
+      "Usage: node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--skip-spz] [--skip-rad]",
     );
   }
   if (opts.sh.some((n) => !Number.isInteger(n) || n < 0 || n > 3)) {
@@ -158,7 +184,7 @@ function convertSplat(input, ext, scene, opts) {
       const file = `${scene}-sh${sh}.spz`;
       const seconds = run("npx", [
         "-y", SPLAT_TRANSFORM, "-w", "--spz-version", "3",
-        input, "-H", String(sh), join(assetsDir, file),
+        input, ...cropArgs(opts.crop).splatTransform, "-H", String(sh), join(assetsDir, file),
       ]);
       added.push(variant(scene, file, `SPZ SH${sh}（一括読み込み）`, "splat", seconds, { paged: false }));
     }
@@ -182,7 +208,9 @@ function convertSplat(input, ext, scene, opts) {
           const { suffix, flag, label } = RAD_ENCODINGS[encoding];
           const file = `${scene}-sh${sh}${suffix}-lod.rad`;
           removeRadFiles(workDir);
-          const seconds = run(buildLod, ["--quality", flag, `--max-sh=${sh}`, "--rad", workInput]);
+          const seconds = run(buildLod, [
+            "--quality", flag, `--max-sh=${sh}`, ...cropArgs(opts.crop).buildLod, "--rad", workInput,
+          ]);
           moveFile(findRadFile(workDir), join(assetsDir, file));
           added.push(
             variant(scene, file, `RAD SH${sh}${label}（LoD・ストリーミング）`, "splat", seconds, { paged: true }),

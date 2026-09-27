@@ -36,6 +36,7 @@ npm run spike:convert -- "/path/to/dogu.glb" --name dogu
 - `--name` は表示用の名前です（ファイル名にも使います）。
 - `--sh 3,1` で作る SH 次数を指定できます（既定は 3 と 1）。
 - `--rad-encoding gsplat,csplat` で作る RAD の保存形式を指定できます（既定は両方）。`gsplat` は高精度（従来どおり）、`csplat` は軽量です。
+- `--crop-sphere x,y,z,半径` / `--crop-box x1,y1,z1,x2,y2,z2` で、その範囲の中の点だけを残します。座標は入力ファイルの座標で、ビューアの `?debug=1` でクリックして出る座標と同じです。
 - `--skip-spz` / `--skip-rad` で片方だけ作れます。
 - 変換結果のサイズと所要時間は `spike/assets/variants.json` に記録されます。500MB 級の PLY では、RAD の変換に時間がかかることがあります。
 

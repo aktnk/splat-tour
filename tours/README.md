@@ -54,6 +54,22 @@ tours/sample/
 
    屋外は屋内より広いので、`camera.moveSpeed` を大きめ（サンプルでは 2）にしています。
 
+## 大きな3DGSを軽くする（切り取り）
+
+ストリーミングでも、見回しているうちにファイルのほぼ全体を読み込みます（建物周辺 169MB の実測では、30秒で 135MB）。スマホの通信量を抑えるには、データ自体を小さくするしかありません。屋外では、遠景や空に浮いたノイズを切り取るのが最も効果的です。
+
+1. 切り取る前のデータを `?debug=1&scene=exterior` で開き、残したい範囲の中心（建物の中央付近の地面など）をクリックして座標を控えます。
+2. 残したい半径（メートル）を決めて変換します。名前を変えておくと、切り取り前と比べられます。
+
+   ```bash
+   npm run spike:convert -- "/path/to/exterior.sog" --name exterior-crop --sh 1 --rad-encoding gsplat --skip-spz --crop-sphere 1.2,-0.5,3.4,30
+   ```
+
+   直方体で切り取るときは `--crop-box x1,y1,z1,x2,y2,z2`（対角の2点）を使います。
+3. `spike/assets/variants.json` でサイズを確認し、`spike:dev` で見た目を確認します。問題なければ `tours/sample/assets/` にコピーし、manifest の `splat.url` を切り取った版に変えます。
+
+座標は切り取っても変わらないので、調べた入口の位置などはそのまま使えます。
+
 ## 操作
 
 | 操作 | PC | スマホ |
