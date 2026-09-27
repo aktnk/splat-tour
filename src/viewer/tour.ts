@@ -56,7 +56,7 @@ export async function startTour({
   debug: debugEnabled,
   startSceneId,
 }: TourOptions): Promise<void> {
-  const status = setupStatusOverlay();
+  const status = setupStatusOverlay(() => resetView());
   const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href;
   let manifest: Manifest;
   try {
@@ -91,6 +91,8 @@ export async function startTour({
     return;
   }
   let busy = false;
+  // The view the current scene was entered with (initialView or an arrival).
+  let entryView: View = { position: [0, 0, 0], yaw: 0, pitch: 0 };
   let loadStartedAt = 0;
   let loadingShown = false;
   // Floor points collected by the debug panel's floor alignment, or null.
@@ -157,6 +159,7 @@ export async function startTour({
     busy = true;
     try {
       current = findScene(manifest, sceneId);
+      entryView = view;
       alignPoints = null;
       interaction.reset();
       markers.setEntrances([], 1);
@@ -182,6 +185,15 @@ export async function startTour({
     }
   }
 
+  function resetView(): void {
+    if (screen !== "scene" || busy) {
+      return;
+    }
+    interaction.reset();
+    splatView.applyView(entryView);
+    loop.invalidate();
+  }
+
   async function activate(entrance: Entrance): Promise<void> {
     if (busy || screen !== "scene") {
       return;
@@ -193,6 +205,7 @@ export async function startTour({
       return;
     }
     setSplatControlsEnabled(false);
+    status.setResetVisible(false);
     if (target.type === "url") {
       screen = "web";
       overlays.showWeb(target.url, entrance.title);
@@ -225,6 +238,7 @@ export async function startTour({
     overlays.hide();
     screen = "scene";
     setSplatControlsEnabled(true);
+    status.setResetVisible(true);
     loop.invalidate();
   }
 
@@ -236,6 +250,7 @@ export async function startTour({
       await loadScene(start.id, start.initialView);
     } else {
       interaction.reset();
+      entryView = start.initialView;
       splatView.applyView(start.initialView);
     }
   }
@@ -245,6 +260,7 @@ export async function startTour({
     const speed = BASE_JOYSTICK_SPEED * current.camera.moveSpeed;
     controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
     controls.update(camera);
+    splatView.clampCamera(current.bounds);
 
     const moved =
       camera.position.distanceToSquared(lastPosition) > 1e-12 ||

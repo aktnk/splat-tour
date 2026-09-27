@@ -61,6 +61,12 @@ export interface Entrance {
   target: EntranceTarget;
 }
 
+/** Axis-aligned box in scene-local coordinates that the camera cannot leave. */
+export interface Bounds {
+  min: Vec3;
+  max: Vec3;
+}
+
 export interface Scene {
   id: string;
   title: string;
@@ -69,6 +75,7 @@ export interface Scene {
   render: RenderSettings;
   camera: CameraSettings;
   initialView: View;
+  bounds?: Bounds;
   entrances: Entrance[];
 }
 
@@ -140,6 +147,17 @@ function view(value: unknown, path: string): View {
     position: vec3(v.position, `${path}.position`),
     yaw: num(v.yaw, `${path}.yaw`, 0),
     pitch: num(v.pitch, `${path}.pitch`, 0),
+  };
+}
+
+function bounds(value: unknown, path: string): Bounds {
+  const b = obj(value, path);
+  const a = vec3(b.min, `${path}.min`);
+  const c = vec3(b.max, `${path}.max`);
+  // Either corner order is accepted.
+  return {
+    min: [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.min(a[2], c[2])],
+    max: [Math.max(a[0], c[0]), Math.max(a[1], c[1]), Math.max(a[2], c[2])],
   };
 }
 
@@ -215,6 +233,7 @@ function scene(value: unknown, path: string): Scene {
       s.initialView === undefined
         ? { position: [0, 0, 0], yaw: 0, pitch: 0 }
         : view(s.initialView, `${path}.initialView`),
+    bounds: s.bounds === undefined ? undefined : bounds(s.bounds, `${path}.bounds`),
     entrances: entrances.map((e, i) => entrance(e, `${path}.entrances[${i}]`)),
   };
 }

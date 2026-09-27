@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { SplatMesh, type SparkRenderer } from "@sparkjsdev/spark";
-import type { Scene, Vec3, View } from "../core/manifest";
+import type { Bounds, Scene, Vec3, View } from "../core/manifest";
 
 // Owns the splat of the current scene. The splat and everything positioned in
 // scene-local coordinates (entrance markers) live under `root`, which carries
@@ -21,6 +21,8 @@ export interface SplatView {
   /** Overrides the scene rotation (degrees, XYZ Euler), e.g. to preview floor alignment. */
   setRotation(degrees: Vec3): void;
   currentView(): View;
+  /** Keeps the camera inside the scene's bounds; true if it had to move it. */
+  clampCamera(bounds: Bounds | undefined): boolean;
   toLocal(world: THREE.Vector3): Vec3;
 }
 
@@ -90,6 +92,18 @@ export function setupSplatView(
         yaw: Math.round((euler.y / DEG) * 10) / 10,
         pitch: Math.round((euler.x / DEG) * 10) / 10,
       };
+    },
+    clampCamera(b: Bounds | undefined) {
+      if (!b) {
+        return false;
+      }
+      const local = root.worldToLocal(camera.position.clone());
+      const clamped = local.clone().clamp(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max));
+      if (clamped.equals(local)) {
+        return false;
+      }
+      camera.position.copy(root.localToWorld(clamped));
+      return true;
     },
     toLocal(world: THREE.Vector3) {
       const local = root.worldToLocal(world.clone());

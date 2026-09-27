@@ -187,6 +187,17 @@ button {
   white-space: nowrap;
 }
 
+#reset-view-btn {
+  position: fixed;
+  right: 16px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  padding: 8px 12px;
+  background: var(--panel-bg);
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 6;
+}
+
 #joystick-zone {
   position: fixed;
   bottom: 32px;
