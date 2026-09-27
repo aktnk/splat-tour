@@ -2,7 +2,8 @@
 // that previews tours with the same code). Import the manifest types and
 // validation from "splat-tour/manifest".
 //
-// startTour() expects the DOM of viewer/index.html (elements looked up by id);
+// startTour() expects the DOM of viewer/index.html (elements looked up by id;
+// import "splat-tour/viewer.html?raw" and "splat-tour/viewer.css" to reuse it);
 // the setupX parts can be composed without it.
 
 export { startTour, type TourOptions } from "./tour";
