@@ -73,7 +73,7 @@ export async function startTour({
   const baseMoveSpeed = controls.fpsMovement.moveSpeed;
   const splatView = setupSplatView(scene, camera, sparkRenderer);
   const markers = setupEntranceMarkers(splatView.root);
-  const meshScreen = setupMeshScreen(canvas);
+  const meshScreen = setupMeshScreen(canvas, renderer);
   const debug = setupDebugPanel(debugEnabled, {
     onAlignStart: () => {
       alignPoints = [];
@@ -105,6 +105,7 @@ export async function startTour({
     camera,
     markers,
     tooltip,
+    occluder: () => splatView.getMesh(),
     imageUrl: (entrance) => (entrance.image ? assetUrl(entrance.image) : undefined),
     isEnabled: () => screen === "scene" && !busy,
     onActivate: (entrance) => void activate(entrance),
@@ -204,7 +205,7 @@ export async function startTour({
     try {
       const meshUrl = assetUrl(target.url);
       await assertAssetAvailable(meshUrl);
-      await meshScreen.open(meshUrl);
+      await meshScreen.open(meshUrl, target.exposure);
     } catch (err) {
       console.error(err);
       overlays.showBar(`${entrance.title}（読み込めませんでした）`);
@@ -250,6 +251,8 @@ export async function startTour({
       1 - Math.abs(camera.quaternion.dot(lastQuaternion)) > 1e-12;
     lastPosition.copy(camera.position);
     lastQuaternion.copy(camera.quaternion);
+    // Cheap for a handful of coins, and covers hover changes too.
+    markers.update(camera);
     if (moved) {
       interaction.updatePopupPosition();
     }
@@ -293,7 +296,7 @@ export async function startTour({
     },
     render() {
       if (screen === "mesh") {
-        renderer.render(meshScreen.scene, meshScreen.camera);
+        meshScreen.render();
       } else if (screen === "scene") {
         renderer.render(scene, camera);
       }

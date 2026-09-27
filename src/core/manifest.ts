@@ -46,7 +46,7 @@ export interface CameraSettings {
 
 export type EntranceTarget =
   | { type: "scene"; sceneId: string; arrival: View }
-  | { type: "mesh"; url: string }
+  | { type: "mesh"; url: string; /** Brightness of the model screen (default 1). */ exposure: number }
   | { type: "url"; url: string };
 
 export interface Entrance {
@@ -153,7 +153,7 @@ function target(value: unknown, path: string): EntranceTarget {
         arrival: view(t.arrival, `${path}.arrival`),
       };
     case "mesh":
-      return { type: "mesh", url: str(t.url, `${path}.url`) };
+      return { type: "mesh", url: str(t.url, `${path}.url`), exposure: num(t.exposure, `${path}.exposure`, 1) };
     case "url":
       return { type: "url", url: str(t.url, `${path}.url`) };
     default:

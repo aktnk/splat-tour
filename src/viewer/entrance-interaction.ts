@@ -15,6 +15,8 @@ export interface EntranceInteractionOptions {
   camera: THREE.Camera;
   markers: EntranceMarkers;
   tooltip: EntranceTooltip;
+  /** Splat mesh that hides entrances behind walls from picking. */
+  occluder(): THREE.Object3D | null;
   imageUrl(entrance: Entrance): string | undefined;
   isEnabled(): boolean;
   onActivate(entrance: Entrance): void;
@@ -89,7 +91,7 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
         if (!e || !options.isEnabled()) {
           return;
         }
-        const hit = markers.pick(ndcOf(e), camera);
+        const hit = markers.pick(ndcOf(e), camera, options.occluder());
         if (hit) {
           canvas.style.cursor = "pointer";
           show(hit);
@@ -117,7 +119,7 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
       return;
     }
     const ndc = ndcOf(event);
-    const hit = markers.pick(ndc, camera);
+    const hit = markers.pick(ndc, camera, options.occluder());
     if (!hit) {
       if (event.pointerType !== "mouse") {
         reset();
