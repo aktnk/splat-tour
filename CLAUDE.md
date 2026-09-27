@@ -25,6 +25,7 @@ npm run build         # `tsc && vite build`; tsc is the only static check (cover
 npm run viewer:dev    # web viewer on port 5190, serving tours/sample (TOUR_DIR=... for another tour); ?debug=1 shows coordinates
                       # first: cp tours/sample/manifest_sample.json tours/sample/manifest.json
 npm run viewer:build  # static viewer build into dist-viewer/ (tour data is published separately)
+npm run tour:bundle   # viewer build + a tour's manifest and referenced assets in dist-publish/, ready for Cloudflare Pages (see tours/README.md)
 npm run spike:convert -- <file.ply|file.glb> --name <scene>   # loading spike: convert into spike/assets/
 npm run spike:dev     # loading spike viewer on port 5180 (LAN-exposed, counts bytes served)
 ```

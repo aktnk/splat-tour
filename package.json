@@ -11,7 +11,8 @@
     "spike:convert": "node tools/spike/convert.mjs",
     "spike:dev": "vite --config vite.spike.config.ts",
     "viewer:dev": "vite --config vite.viewer.config.ts",
-    "viewer:build": "tsc && vite build --config vite.viewer.config.ts"
+    "viewer:build": "tsc && vite build --config vite.viewer.config.ts",
+    "tour:bundle": "node tools/publish/bundle.mjs"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.0.0",

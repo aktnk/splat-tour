@@ -182,12 +182,40 @@ URL に `?debug=1` を付けると、右上に次の情報が出ます。
 
 ## 公開する
 
+**公開の前に、撮影した施設の承諾を得てください。** 仲間内だけのつもりでも、URL を知っている人なら誰でも見られ、データのダウンロードもできます。
+
+### 1. 公開用に変換する（RAD を分割）
+
+Cloudflare Pages は 1ファイル 25MiB までなので、3DGS は `--rad-chunked` を付けて変換し直し、小さなファイルに分けます。
+
 ```bash
-npm run viewer:build     # dist-viewer/ にビューア一式ができる
+npm run spike:convert -- "/path/to/main-hall.ply" --name main-hall --sh 1 --rad-encoding gsplat --skip-spz --rad-chunked
+cp spike/assets/main-hall-sh1-lod.rad spike/assets/main-hall-sh1-lod-*.radc tours/sample/assets/
 ```
 
-- `dist-viewer/` の中身と `manifest.json` を静的ホスティング（例: Cloudflare Pages）に置きます。`manifest.json` はページと同じ場所に置くか、`?manifest=<URL>` で指定します。
-- 大きなアセット（.rad など）はオブジェクトストレージ（例: Cloudflare R2）に置き、`assetBaseUrl` をその URL にします。Cloudflare Pages は 1ファイル 25MiB までなので、.rad はストレージ側に置く必要があります。
-- ストレージ側には次の設定が必要です。
-  - **CORS**: ビューアのドメインから `GET` / `HEAD` を許可し、`Range` ヘッダーを許可する
-  - **HTTP Range リクエスト**: .rad のストリーミングに使う（R2 は対応済み）
+ファイル名（`main-hall-sh1-lod.rad`）は分割前と同じなので、manifest はそのままで構いません。
+
+### 2. 公開用フォルダを作る
+
+```bash
+npm run tour:bundle
+```
+
+`dist-publish/` に、ビューア・`manifest.json`・manifest が参照するアセットだけが集められます（使っていない変換結果は含まれません）。
+
+- `--tour tours/<名前>`：別のツアー（既定は `tours/sample`）
+- 検索エンジンに載らない設定（`robots.txt` と `_headers`）が既定で入ります。一般公開するときは `--allow-indexing` を付けます。
+- 25MiB を超えるファイルがあると警告が出ます。
+- 大きなアセットだけ別のストレージ（例: Cloudflare R2）に置く場合は `--asset-base-url https://…/` を付けます。アセットはフォルダに入らず、置くべきファイルの一覧が表示されます（ストレージ側で CORS と Range リクエストの許可が必要です）。
+
+公開前に手元で確認するには、`dist-publish` を静的サーバーで開きます（例: `npx serve dist-publish`）。
+
+### 3. Cloudflare Pages に置く
+
+- **画面から**：Cloudflare のダッシュボード → Workers & Pages → Create → Pages →「Upload assets」で、`dist-publish` フォルダをアップロードします。
+- **コマンドから**：`npx wrangler login` の後、`npx wrangler pages deploy dist-publish --project-name <プロジェクト名>`。
+
+公開 URL は `https://<プロジェクト名>.pages.dev` になります。**プロジェクト名は URL に出るので、施設名などを入れないでください。**
+
+- 無料プランで利用できます（Pages は転送量の課金なし。料金や上限は変わることがあるので、登録前に公式ページで確認してください）。
+- 見られる人を限定したい場合は、Cloudflare Access（メールアドレスでログインした人だけが見られる仕組み）を Pages に設定できます。
