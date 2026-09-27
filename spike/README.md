@@ -32,6 +32,7 @@ npm run spike:convert -- "/path/to/main-hall.ply" --name main-hall
 npm run spike:convert -- "/path/to/dogu.glb" --name dogu
 ```
 
+- 3DGS は PLY のほか、SOG・SPZ・compressed.ply・splat・ksplat も入力できます。PLY を保存できないツール（LichtFeld Studio の SOG 出力など）でも変換できます。ただし SOG などは圧縮で情報が少し落ちているので、PLY を保存できる場合は PLY の方が画質は有利です。
 - `--name` は表示用の名前です（ファイル名にも使います）。
 - `--sh 3,1` で作る SH 次数を指定できます（既定は 3 と 1）。
 - `--rad-encoding gsplat,csplat` で作る RAD の保存形式を指定できます（既定は両方）。`gsplat` は高精度（従来どおり）、`csplat` は軽量です。

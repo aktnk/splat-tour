@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Converts a 3DGS PLY or a GLB into the variants measured by the spike viewer
-// and records them in spike/assets/variants.json.
+// Converts a 3DGS file (PLY, SOG, SPZ, ...) or a GLB into the variants measured
+// by the spike viewer and records them in spike/assets/variants.json.
 //
-//   node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]
+//   node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]
 //
-// PLY -> <scene>-sh{N}.spz        (splat-transform, SPZ v3: Spark 2.1 cannot read v4)
-//     -> <scene>-sh{N}-lod.rad    (Spark build-lod --quality, streamable with paged: true)
-//     -> <scene>-sh{N}-csplat-lod.rad  (same, with build-lod's compact --csplat encoding)
-// GLB -> <scene>-orig.glb         (copy of the input, for comparison)
-//     -> <scene>-opt.glb          (gltf-transform optimize: meshopt + WebP textures)
+// 3DGS -> <scene>-sh{N}.spz        (splat-transform, SPZ v3: Spark 2.1 cannot read v4)
+//      -> <scene>-sh{N}-lod.rad    (Spark build-lod --quality, streamable with paged: true)
+//      -> <scene>-sh{N}-csplat-lod.rad  (same, with build-lod's compact --csplat encoding)
+// GLB  -> <scene>-orig.glb         (copy of the input, for comparison)
+//      -> <scene>-opt.glb          (gltf-transform optimize: meshopt + WebP textures)
 
 import { spawnSync } from "node:child_process";
 import {
@@ -16,6 +16,7 @@ import {
   existsSync,
   linkSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -35,6 +36,15 @@ const RAD_ENCODINGS = {
   gsplat: { suffix: "", flag: "--gsplat", label: "" },
   csplat: { suffix: "-csplat", flag: "--csplat", label: "・csplat" },
 };
+
+// 3DGS inputs both splat-transform and build-lod read. build-lod picks the
+// format by extension, so the work copy keeps it (longest suffix first).
+const SPLAT_EXTENSIONS = [".compressed.ply", ".ply", ".sog", ".spz", ".splat", ".ksplat"];
+
+function splatExtension(path) {
+  const lower = path.toLowerCase();
+  return SPLAT_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
+}
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const assetsDir = join(repoRoot, "spike/assets");
@@ -56,7 +66,7 @@ function parseArgs(argv) {
   }
   if (!opts.input) {
     throw new Error(
-      "Usage: node tools/spike/convert.mjs <input.ply|input.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]",
+      "Usage: node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--skip-spz] [--skip-rad]",
     );
   }
   if (opts.sh.some((n) => !Number.isInteger(n) || n < 0 || n > 3)) {
@@ -127,7 +137,21 @@ function variant(scene, file, label, kind, buildSeconds, extra = {}) {
   return { scene, file, label, kind, bytes, buildSeconds: Math.round(buildSeconds), ...extra };
 }
 
-function convertPly(input, scene, opts) {
+// The output name follows the input's stem, which for double extensions such
+// as .compressed.ply is not obvious, so take whatever .rad appeared.
+function removeRadFiles(dir) {
+  for (const name of readdirSync(dir)) {
+    if (name.endsWith(".rad")) rmSync(join(dir, name), { force: true });
+  }
+}
+
+function findRadFile(dir) {
+  const name = readdirSync(dir).find((n) => n.endsWith(".rad"));
+  if (!name) throw new Error(`build-lod did not write a .rad file in ${dir}`);
+  return join(dir, name);
+}
+
+function convertSplat(input, ext, scene, opts) {
   const added = [];
   if (!opts.skipSpz) {
     for (const sh of opts.sh) {
@@ -146,7 +170,7 @@ function convertPly(input, scene, opts) {
       // (or copy) inside the cache instead of the user's folder.
       const workDir = join(cacheDir, "work");
       mkdirSync(workDir, { recursive: true });
-      const workInput = join(workDir, `${scene}.ply`);
+      const workInput = join(workDir, `${scene}${ext}`);
       rmSync(workInput, { force: true });
       try {
         linkSync(input, workInput);
@@ -157,8 +181,9 @@ function convertPly(input, scene, opts) {
         for (const encoding of opts.radEncodings) {
           const { suffix, flag, label } = RAD_ENCODINGS[encoding];
           const file = `${scene}-sh${sh}${suffix}-lod.rad`;
+          removeRadFiles(workDir);
           const seconds = run(buildLod, ["--quality", flag, `--max-sh=${sh}`, "--rad", workInput]);
-          moveFile(join(workDir, `${scene}-lod.rad`), join(assetsDir, file));
+          moveFile(findRadFile(workDir), join(assetsDir, file));
           added.push(
             variant(scene, file, `RAD SH${sh}${label}（LoD・ストリーミング）`, "splat", seconds, { paged: true }),
           );
@@ -187,15 +212,16 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   const input = resolve(opts.input);
   if (!existsSync(input)) throw new Error(`Input not found: ${input}`);
-  const ext = extname(input).toLowerCase();
-  const scene = opts.name ?? basename(input, extname(input));
+  const splatExt = splatExtension(input);
+  const isGlb = extname(input).toLowerCase() === ".glb";
+  const scene = opts.name ?? basename(input).slice(0, -(splatExt ?? extname(input)).length);
   mkdirSync(assetsDir, { recursive: true });
 
   console.log(`input: ${input} (${(statSync(input).size / 1e6).toFixed(1)} MB), scene: ${scene}`);
   let added;
-  if (ext === ".ply") added = convertPly(input, scene, opts);
-  else if (ext === ".glb") added = convertGlb(input, scene);
-  else throw new Error(`Unsupported input: ${ext} (.ply or .glb)`);
+  if (splatExt) added = convertSplat(input, splatExt, scene, opts);
+  else if (isGlb) added = convertGlb(input, scene);
+  else throw new Error(`Unsupported input: ${basename(input)} (${SPLAT_EXTENSIONS.join(" ")} .glb)`);
 
   writeVariants(added);
   console.log(`\n${added.length} 件を ${variantsPath} に記録しました。npm run spike:dev で確認できます。`);

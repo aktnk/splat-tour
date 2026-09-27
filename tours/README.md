@@ -33,7 +33,7 @@ tours/sample/
 
 ## シーンを追加する（例: 建物周辺 → 展示場メイン）
 
-1. PLY を変換してアセットに置きます（ツアーに使うのは RAD SH1 だけです）。
+1. 3DGS を変換してアセットに置きます（ツアーに使うのは RAD SH1 だけです）。PLY の代わりに SOG（`exterior.sog` など）も指定できます。
 
    ```bash
    npm run spike:convert -- "/path/to/exterior.ply" --name exterior --sh 1 --rad-encoding gsplat --skip-spz
