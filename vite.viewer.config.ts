@@ -14,6 +14,9 @@ export default defineConfig(({ command }) => ({
   base: "./",
   publicDir: command === "serve" ? fileURLToPath(new URL(tourDir, new URL("./", import.meta.url))) : false,
   clearScreen: false,
+  // Missing files get a 404 instead of the index.html SPA fallback, which
+  // loaders would otherwise try to decode as the asset.
+  appType: "mpa",
   server: {
     port: 5190,
     host: true,

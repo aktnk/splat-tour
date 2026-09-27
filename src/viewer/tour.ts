@@ -21,6 +21,7 @@ import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
 import { setupDebugPanel } from "./debug-panel";
 import { levelingRotation } from "./floor-align";
+import { assertAssetAvailable } from "./asset-check";
 
 // Composition root of the web viewer: loads the manifest, shows the start
 // scene and moves between scenes, the mesh screen and the web screen.
@@ -164,9 +165,11 @@ export async function startTour({
       loadStartedAt = performance.now();
       controls.fpsMovement.moveSpeed = baseMoveSpeed * current.camera.moveSpeed;
 
+      const splatUrl = assetUrl(current.splat.url);
+      await assertAssetAvailable(splatUrl);
       // The view is applied right after the transform, before the splat is
       // initialized, so streaming starts with the chunks around the arrival point.
-      const loading = splatView.load(current, assetUrl(current.splat.url));
+      const loading = splatView.load(current, splatUrl);
       splatView.applyView(view);
       await loading;
       markers.setEntrances(current.entrances, current.transform.scale);
@@ -199,7 +202,9 @@ export async function startTour({
     busy = true;
     status.setLoading(true);
     try {
-      await meshScreen.open(assetUrl(target.url));
+      const meshUrl = assetUrl(target.url);
+      await assertAssetAvailable(meshUrl);
+      await meshScreen.open(meshUrl);
     } catch (err) {
       console.error(err);
       overlays.showBar(`${entrance.title}（読み込めませんでした）`);

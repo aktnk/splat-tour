@@ -85,6 +85,9 @@ export default defineConfig({
   root: fileURLToPath(new URL("./spike", import.meta.url)),
   publicDir: "assets",
   clearScreen: false,
+  // Missing files get a 404 instead of the index.html SPA fallback, which
+  // loaders would otherwise try to decode as the asset.
+  appType: "mpa",
   plugins: [byteCounter()],
   server: {
     port: 5180,
