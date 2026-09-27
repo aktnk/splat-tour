@@ -29,6 +29,7 @@ npm run tauri dev
 公開用のWebビューア（`viewer/`）とツアーデータ（`tours/`）の使い方・manifest の書き方・公開方法は [tours/README.md](./tours/README.md) を参照。
 
 ```bash
+cp tours/sample/manifest_sample.json tours/sample/manifest.json   # 初回だけ（manifest.json は git に入らない）
 npm run viewer:dev      # http://localhost:5190（tours/sample を表示）
 npm run viewer:build    # dist-viewer/ に公開用ビルド
 ```

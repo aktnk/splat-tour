@@ -2,10 +2,13 @@
 
 Webビューア（`viewer/`）で公開するツアーを置くフォルダです。1ツアー = 1フォルダで、`manifest.json`（ツアーの定義）と `assets/`（3DGS・3Dモデル・画像）から成ります。
 
+`manifest.json` と `assets/` は git に登録されません（`.gitignore`）。実在の施設名や、公開の承諾前の座標などをうっかりコミットしないためです。リポジトリには、ひな形の `manifest_sample.json` だけを入れています。
+
 ```
 tours/sample/
-  manifest.json      ← git に入る
-  assets/            ← 大きなファイルなので git には入らない
+  manifest_sample.json  ← git に入る（ひな形）
+  manifest.json         ← git に入らない（ひな形をコピーして作る）
+  assets/               ← git に入らない（大きなファイル）
     main-hall-sh1-lod.rad
     doki-opt.glb
 ```
@@ -14,13 +17,21 @@ tours/sample/
 
 ## 手元で動かす
 
-1. アセットを置きます。spike で変換したファイルをコピーします。
+1. ひな形をコピーして `manifest.json` を作ります（初回だけ）。
+
+   ```bash
+   cp tours/sample/manifest_sample.json tours/sample/manifest.json
+   ```
+
+   以降は `manifest.json` を編集します。ひな形の書き方を変えたいとき（新しい項目の例を足すなど）だけ、`manifest_sample.json` を編集してコミットします。その際、実在の名称や実際の座標は書かないでください。
+
+2. アセットを置きます。spike で変換したファイルをコピーします。
 
    ```bash
    cp spike/assets/main-hall-sh1-lod.rad spike/assets/doki-opt.glb tours/sample/assets/
    ```
 
-2. 起動します。
+3. 起動します。
 
    ```bash
    npm run viewer:dev
@@ -40,7 +51,7 @@ tours/sample/
    cp spike/assets/exterior-sh1-lod.rad tours/sample/assets/
    ```
 
-2. manifest にシーンを足し、行き来する入口・出口を両方のシーンに置きます。サンプルの `tours/sample/manifest.json` には、建物周辺（`exterior`）から展示場メインへの入口「建物に入る」と、展示場メインから外へ戻る出口「外に出る」が入っています。座標は仮の値です。
+2. manifest にシーンを足し、行き来する入口・出口を両方のシーンに置きます。ひな形（`manifest_sample.json`）には、建物周辺（`exterior`）から展示場メインへの入口「建物に入る」と、展示場メインから外へ戻る出口「外に出る」が入っています。座標は仮の値です。
 3. `?debug=1` で座標を調べて、仮の値を置き換えます。
 
    | 調べるもの | 開くシーン | やること |

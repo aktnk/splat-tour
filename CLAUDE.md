@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-splat-tour is a Tauri v2 desktop app: a virtual-tour viewer for 3D Gaussian Splatting (3DGS) scenes where the user can place entrance icons at 3D positions. Hovering an icon shows an annotation (text + image); clicking it opens the configured content (another 3DGS, a 3D mesh, or a web URL). Stack: Vite + TypeScript, Three.js, `@sparkjsdev/spark` (3DGS renderer), nipplejs (touch joystick). The spec is `docs/spec/specification.md` (Japanese) and the README holds a progress checklist. The code so far implements only part of the spec. There are two apps: the Tauri app in `src/` (future authoring tool; clicking an icon in Explore mode still only `console.log`s the annotation) and the web viewer in `viewer/` + `src/viewer/`, which plays a tour from a hand-written `manifest.json` (see `tours/README.md`).
+splat-tour is a Tauri v2 desktop app: a virtual-tour viewer for 3D Gaussian Splatting (3DGS) scenes where the user can place entrance icons at 3D positions. Hovering an icon shows an annotation (text + image); clicking it opens the configured content (another 3DGS, a 3D mesh, or a web URL). Stack: Vite + TypeScript, Three.js, `@sparkjsdev/spark` (3DGS renderer), nipplejs (touch joystick). The spec is `docs/spec/specification.md` (Japanese) and the README holds a progress checklist. The code so far implements only part of the spec. There are two apps: the Tauri app in `src/` (future authoring tool; clicking an icon in Explore mode still only `console.log`s the annotation) and the web viewer in `viewer/` + `src/viewer/`, which plays a tour from a hand-written `manifest.json` (see `tours/README.md`). Tours' `manifest.json` and `assets/` are gitignored because they can name a real site whose owner has not approved publication; only the template `manifest_sample.json` is committed, and it must stay free of real names and real coordinates.
 
 ## Direction (spec vs. current code)
 
@@ -23,6 +23,7 @@ npm run tauri dev     # full app (starts Vite on fixed port 1420 via beforeDevCo
 npm run dev           # frontend only in a browser — Tauri APIs (file dialog, fs, invoke) will not work
 npm run build         # `tsc && vite build`; tsc is the only static check (covers src/, spike/ and viewer/)
 npm run viewer:dev    # web viewer on port 5190, serving tours/sample (TOUR_DIR=... for another tour); ?debug=1 shows coordinates
+                      # first: cp tours/sample/manifest_sample.json tours/sample/manifest.json
 npm run viewer:build  # static viewer build into dist-viewer/ (tour data is published separately)
 npm run spike:convert -- <file.ply|file.glb> --name <scene>   # loading spike: convert into spike/assets/
 npm run spike:dev     # loading spike viewer on port 5180 (LAN-exposed, counts bytes served)

@@ -45,7 +45,11 @@ export interface TourOptions {
 async function fetchManifest(url: string): Promise<Manifest> {
   const response = await fetch(url, { cache: "no-cache" });
   if (!response.ok) {
-    throw new Error(`manifest を読み込めません: ${url} (${response.status})`);
+    const hint =
+      response.status === 404
+        ? "\nツアーのフォルダで manifest_sample.json をコピーして manifest.json を作ってください。"
+        : "";
+    throw new Error(`manifest を読み込めません: ${url} (${response.status})${hint}`);
   }
   return parseManifest(await response.json());
 }

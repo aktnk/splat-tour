@@ -38,6 +38,9 @@ memo*.txt
 
 # Web viewer build and tour assets (large files are published separately)
 dist-viewer/
+# A tour's manifest may name the real site and its layout; only samples
+# (manifest_sample.json) are committed.
+tours/*/manifest.json
 tours/*/assets/*
 !tours/*/assets/.gitkeep
 
