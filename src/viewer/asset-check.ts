@@ -14,10 +14,14 @@ export async function assertAssetAvailable(url: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`ファイルが見つかりません（${response.status}）: ${url}`);
   }
+  // Judged by the first bytes, not only by Content-Type: some servers label
+  // unknown extensions as HTML (Tauri's asset protocol serves .rad and .glb
+  // as text/html). No splat or model format starts with "<".
   const contentType = response.headers.get("content-type") ?? "";
   const head = new Uint8Array(await response.arrayBuffer()).subarray(0, 16);
   const text = new TextDecoder().decode(head).trimStart().toLowerCase();
-  if (contentType.includes("text/html") || text.startsWith("<!doctype") || text.startsWith("<html")) {
+  const looksLikeHtml = text.startsWith("<!doctype") || text.startsWith("<html");
+  if (looksLikeHtml || (contentType.includes("text/html") && text.startsWith("<"))) {
     throw new Error(`ファイルが見つかりません（代わりに HTML が返されました）: ${url}`);
   }
 }
