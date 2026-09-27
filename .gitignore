@@ -35,3 +35,17 @@ desktop.ini
 
 # memo
 memo*.txt
+
+# Web viewer build and tour assets (large files are published separately)
+dist-viewer/
+# A tour's manifest may name the real site and its layout; only samples
+# (manifest_sample.json) are committed.
+tours/*/manifest.json
+tours/*/assets/*
+!tours/*/assets/.gitkeep
+
+# Spike (large converted assets and tool caches stay local)
+spike/assets/*
+!spike/assets/.gitkeep
+spike/results/
+tools/.cache/
