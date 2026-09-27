@@ -24,6 +24,9 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: fileURLToPath(new URL("./dist-viewer", import.meta.url)),
     emptyOutDir: true,
+    // Keep the viewer's own JS/CSS apart from a tour's assets/ folder when
+    // both are published together.
+    assetsDir: "app",
     chunkSizeWarningLimit: 6000,
   },
 }));

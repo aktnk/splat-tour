@@ -2,10 +2,13 @@
 // Converts a 3DGS file (PLY, SOG, SPZ, ...) or a GLB into the variants measured
 // by the spike viewer and records them in spike/assets/variants.json.
 //
-//   node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--skip-spz] [--skip-rad]
+//   node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--rad-chunked] [--skip-spz] [--skip-rad]
 //
 // 3DGS -> <scene>-sh{N}.spz        (splat-transform, SPZ v3: Spark 2.1 cannot read v4)
 //      -> <scene>-sh{N}-lod.rad    (Spark build-lod --quality, streamable with paged: true)
+//      -> <scene>-sh{N}-lod.rad + <scene>-sh{N}-lod-<i>.radc with --rad-chunked: a small
+//         header plus chunk files, so every file fits static hosts' size limits
+//         (Cloudflare Pages: 25 MiB) and no HTTP Range support is needed
 //      -> <scene>-sh{N}-csplat-lod.rad  (same, with build-lod's compact --csplat encoding)
 //
 // --crop-sphere / --crop-box keep only the splats inside, in the input file's
@@ -77,7 +80,7 @@ function cropArgs(crop) {
 }
 
 function parseArgs(argv) {
-  const opts = { input: null, name: null, sh: [3, 1], radEncodings: ["gsplat", "csplat"], crop: null, skipSpz: false, skipRad: false };
+  const opts = { input: null, name: null, sh: [3, 1], radEncodings: ["gsplat", "csplat"], crop: null, radChunked: false, skipSpz: false, skipRad: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--name") opts.name = argv[++i];
@@ -85,6 +88,7 @@ function parseArgs(argv) {
     else if (arg === "--rad-encoding") opts.radEncodings = argv[++i].split(",");
     else if (arg === "--crop-sphere") opts.crop = { kind: "sphere", values: numbers(argv[++i], 4, arg) };
     else if (arg === "--crop-box") opts.crop = { kind: "box", values: numbers(argv[++i], 6, arg) };
+    else if (arg === "--rad-chunked") opts.radChunked = true;
     else if (arg === "--skip-spz") opts.skipSpz = true;
     else if (arg === "--skip-rad") opts.skipRad = true;
     else if (!arg.startsWith("--") && !opts.input) opts.input = arg;
@@ -92,7 +96,7 @@ function parseArgs(argv) {
   }
   if (!opts.input) {
     throw new Error(
-      "Usage: node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--skip-spz] [--skip-rad]",
+      "Usage: node tools/spike/convert.mjs <input.ply|.sog|.spz|.glb> [--name <scene>] [--sh 3,1] [--rad-encoding gsplat,csplat] [--crop-sphere x,y,z,r | --crop-box x1,y1,z1,x2,y2,z2] [--rad-chunked] [--skip-spz] [--skip-rad]",
     );
   }
   if (opts.sh.some((n) => !Number.isInteger(n) || n < 0 || n > 3)) {
@@ -163,18 +167,26 @@ function variant(scene, file, label, kind, buildSeconds, extra = {}) {
   return { scene, file, label, kind, bytes, buildSeconds: Math.round(buildSeconds), ...extra };
 }
 
-// The output name follows the input's stem, which for double extensions such
-// as .compressed.ply is not obvious, so take whatever .rad appeared.
-function removeRadFiles(dir) {
+// Largest file Cloudflare Pages serves; bigger ones need object storage.
+const PAGES_FILE_LIMIT = 25 * 1024 * 1024;
+
+const isRadOutput = (name) => name.endsWith(".rad") || name.endsWith(".radc");
+
+function removeRadOutputs(dir) {
   for (const name of readdirSync(dir)) {
-    if (name.endsWith(".rad")) rmSync(join(dir, name), { force: true });
+    if (isRadOutput(name)) rmSync(join(dir, name), { force: true });
   }
 }
 
-function findRadFile(dir) {
-  const name = readdirSync(dir).find((n) => n.endsWith(".rad"));
-  if (!name) throw new Error(`build-lod did not write a .rad file in ${dir}`);
-  return join(dir, name);
+// build-lod names its outputs after the input's stem (not obvious for double
+// extensions such as .compressed.ply), so take whatever appeared. Chunk file
+// names are recorded inside the header and must not be renamed; the header
+// itself can be.
+function collectRadOutputs(dir) {
+  const names = readdirSync(dir).filter(isRadOutput);
+  const header = names.find((n) => n.endsWith(".rad"));
+  if (!header) throw new Error(`build-lod did not write a .rad file in ${dir}`);
+  return { header: join(dir, header), chunks: names.filter((n) => n.endsWith(".radc")).map((n) => join(dir, n)) };
 }
 
 function convertSplat(input, ext, scene, opts) {
@@ -192,32 +204,55 @@ function convertSplat(input, ext, scene, opts) {
   if (!opts.skipRad) {
     const buildLod = ensureBuildLod();
     if (buildLod) {
-      // build-lod writes <input>-lod.rad next to its input, so work on a link
-      // (or copy) inside the cache instead of the user's folder.
+      // build-lod writes its output next to its input, so work on a link (or
+      // copy) inside the cache instead of the user's folder. Each variant gets
+      // its own work name because chunk files are named after the input.
       const workDir = join(cacheDir, "work");
       mkdirSync(workDir, { recursive: true });
-      const workInput = join(workDir, `${scene}${ext}`);
-      rmSync(workInput, { force: true });
-      try {
-        linkSync(input, workInput);
-      } catch {
-        copyFileSync(input, workInput);
-      }
       for (const sh of opts.sh) {
         for (const encoding of opts.radEncodings) {
           const { suffix, flag, label } = RAD_ENCODINGS[encoding];
-          const file = `${scene}-sh${sh}${suffix}-lod.rad`;
-          removeRadFiles(workDir);
+          const base = `${scene}-sh${sh}${suffix}-lod`;
+          const workInput = join(workDir, `${scene}-sh${sh}${suffix}${ext}`);
+          rmSync(workInput, { force: true });
+          try {
+            linkSync(input, workInput);
+          } catch {
+            copyFileSync(input, workInput);
+          }
+          removeRadOutputs(workDir);
           const seconds = run(buildLod, [
-            "--quality", flag, `--max-sh=${sh}`, ...cropArgs(opts.crop).buildLod, "--rad", workInput,
+            "--quality", flag, `--max-sh=${sh}`, ...cropArgs(opts.crop).buildLod,
+            opts.radChunked ? "--rad-chunked" : "--rad", workInput,
           ]);
-          moveFile(findRadFile(workDir), join(assetsDir, file));
-          added.push(
-            variant(scene, file, `RAD SH${sh}${label}（LoD・ストリーミング）`, "splat", seconds, { paged: true }),
+          rmSync(workInput, { force: true });
+
+          const { header, chunks } = collectRadOutputs(workDir);
+          // Drop chunks of an earlier conversion of the same variant.
+          for (const name of readdirSync(assetsDir)) {
+            if (name.startsWith(`${base}-`) && name.endsWith(".radc")) rmSync(join(assetsDir, name));
+          }
+          const file = `${base}.rad`;
+          moveFile(header, join(assetsDir, file));
+          for (const chunk of chunks) {
+            moveFile(chunk, join(assetsDir, basename(chunk)));
+          }
+
+          const sizes = [file, ...chunks.map((c) => basename(c))].map((n) => statSync(join(assetsDir, n)).size);
+          const v = variant(
+            scene, file,
+            `RAD SH${sh}${label}${chunks.length ? `・分割${chunks.length}` : ""}（LoD・ストリーミング）`,
+            "splat", seconds, { paged: true, chunks: chunks.length },
           );
+          v.bytes = sizes.reduce((a, b) => a + b, 0);
+          const largest = Math.max(...sizes);
+          console.log(`  total ${(v.bytes / 1e6).toFixed(1)} MB in ${sizes.length} file(s), largest ${(largest / 1e6).toFixed(1)} MB`);
+          if (largest > PAGES_FILE_LIMIT) {
+            console.warn("  [warn] 25 MiB を超えるファイルがあります。Cloudflare Pages に置くには --rad-chunked を付けてください。");
+          }
+          added.push(v);
         }
       }
-      rmSync(workInput, { force: true });
     }
   }
   return added;
