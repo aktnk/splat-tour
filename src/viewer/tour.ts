@@ -257,7 +257,7 @@ export async function startTour({
       return;
     }
     screen = "mesh";
-    overlays.showBar(entrance.title);
+    overlays.showMesh(entrance.title);
     busy = true;
     status.setLoading(true);
     try {
@@ -266,7 +266,7 @@ export async function startTour({
       await meshScreen.open(meshUrl, target.exposure);
     } catch (err) {
       console.error(err);
-      overlays.showBar(`${entrance.title}（読み込めませんでした）`);
+      overlays.showMesh(`${entrance.title}（読み込めませんでした）`);
     } finally {
       busy = false;
       status.setLoading(false);

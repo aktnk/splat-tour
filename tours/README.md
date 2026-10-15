@@ -144,7 +144,7 @@ manifest は手で書けます（GUI の制作ツールは別のプロジェク�
 | type | 書き方 | 動作 |
 |---|---|---|
 | `scene` | `{ "type": "scene", "sceneId": "sub-hall", "arrival": { "position": [x, y, z], "yaw": 0, "pitch": 0 } }` | 別の3DGSに移動し、`arrival` の位置・向きから表示 |
-| `mesh` | `{ "type": "mesh", "url": "doki-opt.glb", "exposure": 1 }` | 3Dモデル画面（「戻る」「終了」付き）。`exposure` は明るさ（省略時 1、暗ければ 1.5 など） |
+| `mesh` | `{ "type": "mesh", "url": "doki-opt.glb", "exposure": 1 }` | 3Dモデル画面（「戻る」付き）。`exposure` は明るさ（省略時 1、暗ければ 1.5 など） |
 | `url` | `{ "type": "url", "url": "https://…" }` | Webページ画面（「戻る」「終了」「新しいタブで開く」付き） |
 
 - 3DGS 間の移動に「戻る」ボタンはありません。戻り道は、遷移先のシーンに「出口」（`kind: "exit"`）を置いて作ります。
