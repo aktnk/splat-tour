@@ -194,7 +194,11 @@ export async function startTour({
     loop.invalidate();
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `${current.id}-${screen === "mesh" ? "model" : "view"}.${captureExtension(blob)}`;
+    // The time keeps captures of the same scene apart (e.g. one per entrance).
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    link.download = `${current.id}-${screen === "mesh" ? "model" : "view"}-${stamp}.${captureExtension(blob)}`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
   }
