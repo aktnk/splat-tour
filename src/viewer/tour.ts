@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  entranceTargetLabel,
   findScene,
   parseManifest,
   resolveAssetUrl,
@@ -20,8 +21,10 @@ import { setupMeshScreen } from "./mesh-screen";
 import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
 import { setupDebugPanel } from "./debug-panel";
+import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
+import { captureExtension, captureFrame } from "./capture";
 
 // Composition root of the web viewer: loads the manifest, shows the start
 // scene and moves between scenes, the mesh screen and the web screen.
@@ -83,6 +86,7 @@ export async function startTour({
       alignPoints = [];
       debug.showAlignProgress(0);
     },
+    onCapture: () => void saveCapture(),
   });
   const raycaster = new THREE.Raycaster();
 
@@ -112,7 +116,12 @@ export async function startTour({
     markers,
     tooltip,
     occluder: () => splatView.getMesh(),
-    imageUrl: (entrance) => (entrance.image ? assetUrl(entrance.image) : undefined),
+    media: (entrance) => ({
+      imageUrl: entrance.image ? assetUrl(entrance.image) : undefined,
+      preview: entrance.preview
+        ? { url: assetUrl(entrance.preview), label: entranceTargetLabel(manifest, entrance) }
+        : undefined,
+    }),
     isEnabled: () => screen === "scene" && !busy,
     onActivate: (entrance) => void activate(entrance),
     onEmptyClick: (ndc) => {
@@ -136,6 +145,13 @@ export async function startTour({
     onChange: () => loop.invalidate(),
   });
   const overlays = setupOverlayScreens({ onBack: back, onExit: () => void exit() });
+  const sidebar = setupSidebar(manifest, {
+    onScene: (sceneId) => void goToScene(sceneId),
+    onEntrance: (sceneId, entrance) => void openFromSidebar(sceneId, entrance),
+    onOpenChange: (open) => {
+      if (open) interaction.reset();
+    },
+  });
 
   function setSplatControlsEnabled(enabled: boolean): void {
     controls.fpsMovement.enable = enabled;
@@ -159,6 +175,30 @@ export async function startTour({
     loop.invalidate();
   }
 
+  // Debug panel: downloads the current view (or model) without the entrance
+  // icons, sized for an entrance's `preview`.
+  async function saveCapture(): Promise<void> {
+    if (screen === "web") {
+      return;
+    }
+    const blob = await captureFrame(canvas, () => {
+      if (screen === "mesh") {
+        meshScreen.render();
+        return;
+      }
+      markers.setVisible(false);
+      renderer.render(scene, camera);
+      markers.setVisible(true);
+    });
+    // Draw the icons again.
+    loop.invalidate();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${current.id}-${screen === "mesh" ? "model" : "view"}.${captureExtension(blob)}`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  }
+
   async function loadScene(sceneId: string, view: View): Promise<void> {
     busy = true;
     try {
@@ -168,6 +208,7 @@ export async function startTour({
       interaction.reset();
       markers.setEntrances([], 1);
       status.setTitles(manifest.title, current.title);
+      sidebar.setCurrent(current.id);
       status.setLoading(true);
       loadingShown = true;
       loadStartedAt = performance.now();
@@ -244,6 +285,38 @@ export async function startTour({
     setSplatControlsEnabled(true);
     status.setResetVisible(true);
     loop.invalidate();
+  }
+
+  // From the sidebar: a scene opens at its first view.
+  async function goToScene(sceneId: string): Promise<void> {
+    if (busy) {
+      return;
+    }
+    back();
+    const scene = findScene(manifest, sceneId);
+    if (scene.id !== current.id) {
+      await loadScene(scene.id, scene.initialView);
+      return;
+    }
+    interaction.reset();
+    entryView = scene.initialView;
+    splatView.applyView(scene.initialView);
+    loop.invalidate();
+  }
+
+  // From the sidebar: an entrance does what clicking its icon does. A model or
+  // web page is opened from the scene the entrance is in, so "戻る" returns
+  // there; a scene target is entered directly at its arrival view.
+  async function openFromSidebar(sceneId: string, entrance: Entrance): Promise<void> {
+    if (busy) {
+      return;
+    }
+    back();
+    if (entrance.target.type !== "scene" && sceneId !== current.id) {
+      const scene = findScene(manifest, sceneId);
+      await loadScene(scene.id, scene.initialView);
+    }
+    await activate(entrance);
   }
 
   // Back to the start of the tour.
@@ -333,7 +406,9 @@ export async function startTour({
     if (event.key !== "Escape") {
       return;
     }
-    if (screen !== "scene") {
+    if (sidebar.isOpen()) {
+      sidebar.close();
+    } else if (screen !== "scene") {
       back();
     } else {
       interaction.reset();

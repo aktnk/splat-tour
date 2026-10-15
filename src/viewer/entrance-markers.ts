@@ -105,6 +105,8 @@ export interface EntranceMarkers {
   setHovered(id: string | null): void;
   /** World position of an entrance's icon. */
   worldPosition(id: string): THREE.Vector3 | undefined;
+  /** Shows or hides all coins, e.g. to capture the scene without them. */
+  setVisible(visible: boolean): void;
 }
 
 export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
@@ -239,6 +241,9 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
     },
     worldPosition(id: string) {
       return coinsById.get(id)?.getWorldPosition(new THREE.Vector3());
+    },
+    setVisible(visible: boolean) {
+      group.visible = visible;
     },
   };
 }

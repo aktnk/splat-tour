@@ -10,9 +10,19 @@
     <canvas id="viewer-canvas"></canvas>
 
     <header id="tour-header">
+      <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" title="目次">☰</button>
       <h1 id="tour-title"></h1>
       <span id="scene-title"></span>
     </header>
+
+    <div id="sidebar-backdrop" hidden></div>
+    <nav id="sidebar" aria-label="目次" aria-hidden="true">
+      <div id="sidebar-head">
+        <span id="sidebar-title"></span>
+        <button id="sidebar-close" type="button" title="閉じる">×</button>
+      </div>
+      <ul id="sidebar-list"></ul>
+    </nav>
 
     <div id="loading" hidden>
       <div class="spinner"></div>
@@ -25,6 +35,10 @@
       <img id="tooltip-image" alt="" hidden />
       <h2 id="tooltip-title"></h2>
       <p id="tooltip-description"></p>
+      <figure id="tooltip-preview" hidden>
+        <img id="tooltip-preview-image" alt="" />
+        <figcaption>移動先: <span id="tooltip-preview-label"></span></figcaption>
+      </figure>
       <button id="tooltip-open-btn" type="button">開く</button>
     </div>
 
@@ -52,6 +66,7 @@
         <textarea id="debug-point" rows="1" readonly></textarea>
       </label>
       <button id="debug-align-btn" type="button">床合わせ（床を3点クリック）</button>
+      <button id="debug-capture-btn" type="button" title="入口の preview（移動先の画像）用。アイコンは写りません">今の画面を画像で保存</button>
       <span id="debug-align-status"></span>
       <textarea id="debug-transform" rows="2" readonly hidden></textarea>
     </div>

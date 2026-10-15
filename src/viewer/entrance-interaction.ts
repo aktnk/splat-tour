@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Entrance } from "../core/manifest";
 import type { EntranceMarkers } from "./entrance-markers";
-import type { EntranceTooltip } from "./entrance-tooltip";
+import type { EntranceTooltip, TooltipMedia } from "./entrance-tooltip";
 
 // Pointer handling for entrances.
 // Mouse: hovering an icon shows its description, clicking opens it.
@@ -17,7 +17,7 @@ export interface EntranceInteractionOptions {
   tooltip: EntranceTooltip;
   /** Splat mesh that hides entrances behind walls from picking. */
   occluder(): THREE.Object3D | null;
-  imageUrl(entrance: Entrance): string | undefined;
+  media(entrance: Entrance): TooltipMedia;
   isEnabled(): boolean;
   onActivate(entrance: Entrance): void;
   /** Click or tap that hit no entrance. */
@@ -48,7 +48,7 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
 
   function show(entrance: Entrance): void {
     markers.setHovered(entrance.id);
-    tooltip.show(entrance, options.imageUrl(entrance));
+    tooltip.show(entrance, options.media(entrance));
     updatePopupPosition();
     options.onChange();
   }

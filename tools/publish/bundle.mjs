@@ -49,6 +49,7 @@ function referencedAssets(manifest) {
     if (scene.splat?.url) paths.add(scene.splat.url);
     for (const entrance of scene.entrances ?? []) {
       if (entrance.image) paths.add(entrance.image);
+      if (entrance.preview) paths.add(entrance.preview);
       if (entrance.target?.type === "mesh" && entrance.target.url) paths.add(entrance.target.url);
     }
   }

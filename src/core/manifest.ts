@@ -59,6 +59,8 @@ export interface Entrance {
   description: string;
   /** Optional image shown on hover, relative to assetBaseUrl. */
   image?: string;
+  /** Optional capture of where the entrance leads (e.g. the arrival view), shown on hover. */
+  preview?: string;
   target: EntranceTarget;
 }
 
@@ -193,6 +195,7 @@ function entrance(value: unknown, path: string): Entrance {
     title: str(e.title, `${path}.title`),
     description: optStr(e.description, `${path}.description`, ""),
     image: e.image === undefined ? undefined : str(e.image, `${path}.image`),
+    preview: e.preview === undefined ? undefined : str(e.preview, `${path}.preview`),
     target: target(e.target, `${path}.target`),
   };
 }
@@ -285,6 +288,15 @@ export function findScene(manifest: Manifest, id: string): Scene {
     throw new ManifestError(`シーン "${id}" がありません`);
   }
   return found;
+}
+
+/** Where an entrance leads, for labels: the target scene's title, or the kind of content. */
+export function entranceTargetLabel(manifest: Manifest, entrance: Entrance): string {
+  const { target } = entrance;
+  if (target.type === "scene") {
+    return manifest.scenes.find((s) => s.id === target.sceneId)?.title ?? target.sceneId;
+  }
+  return target.type === "mesh" ? "3Dモデル" : "Webページ";
 }
 
 /**
