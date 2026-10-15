@@ -35,10 +35,15 @@ export function setupSidebar(manifest: Manifest, handlers: SidebarHandlers): Sid
   function setOpen(next: boolean): void {
     if (open === next) return;
     open = next;
+    // The button just pressed inside the drawer must not keep focus in a
+    // hidden part of the page (browsers warn and screen readers lose it).
+    if (!open && sidebar.contains(document.activeElement)) {
+      toggle.focus();
+    }
     sidebar.classList.toggle("open", open);
     backdrop.hidden = !open;
     toggle.setAttribute("aria-expanded", String(open));
-    sidebar.setAttribute("aria-hidden", String(!open));
+    // inert hides the closed drawer from assistive technology and keyboard focus.
     sidebar.inert = !open;
     handlers.onOpenChange?.(open);
   }
