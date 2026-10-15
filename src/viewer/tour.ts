@@ -41,7 +41,7 @@ export interface TourOptions {
   canvas: HTMLCanvasElement;
   manifestUrl: string;
   debug: boolean;
-  /** Scene to open instead of startSceneId (authoring aid); "終了" still goes to the start. */
+  /** Scene to open instead of startSceneId (authoring aid). */
   startSceneId?: string;
 }
 
@@ -144,7 +144,7 @@ export async function startTour({
     },
     onChange: () => loop.invalidate(),
   });
-  const overlays = setupOverlayScreens({ onBack: back, onExit: () => void exit() });
+  const overlays = setupOverlayScreens({ onBack: back });
   const sidebar = setupSidebar(manifest, {
     onScene: (sceneId) => void goToScene(sceneId),
     onEntrance: (sceneId, entrance) => void openFromSidebar(sceneId, entrance),
@@ -317,19 +317,6 @@ export async function startTour({
       await loadScene(scene.id, scene.initialView);
     }
     await activate(entrance);
-  }
-
-  // Back to the start of the tour.
-  async function exit(): Promise<void> {
-    back();
-    const start = findScene(manifest, manifest.startSceneId);
-    if (current.id !== start.id) {
-      await loadScene(start.id, start.initialView);
-    } else {
-      interaction.reset();
-      entryView = start.initialView;
-      splatView.applyView(start.initialView);
-    }
   }
 
   function tickScene(): boolean {

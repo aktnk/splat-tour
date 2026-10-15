@@ -40,7 +40,7 @@ manifest は手で書けます（GUI の制作ツールは別のプロジェク�
    - PC: http://localhost:5190
    - スマホ: 同じ Wi-Fi で `http://<PCのIP>:5190`（ターミナルに表示される Network の URL）
    - 別のツアーを開くとき: `TOUR_DIR=tours/<名前> npm run viewer:dev`
-   - 特定のシーンから開くとき: `?scene=<シーンのid>`（例: `?debug=1&scene=main-hall`）。「終了」は `startSceneId` に戻ります
+   - 特定のシーンから開くとき: `?scene=<シーンのid>`（例: `?debug=1&scene=main-hall`）
 
 ## シーンを追加する（例: 建物周辺 → 展示場メイン）
 
@@ -111,7 +111,7 @@ manifest は手で書けます（GUI の制作ツールは別のプロジェク�
   "version": 1,
   "title": "ツアー名",
   "assetBaseUrl": "./assets/",        // アセットの置き場所。manifest からの相対パス、または https://… の URL
-  "startSceneId": "main-hall",        // 最初に表示するシーン（「終了」で戻る先）
+  "startSceneId": "main-hall",        // 最初に表示するシーン
   "scenes": [
     {
       "id": "main-hall",              // シーンの識別子（英数字）
@@ -145,7 +145,7 @@ manifest は手で書けます（GUI の制作ツールは別のプロジェク�
 |---|---|---|
 | `scene` | `{ "type": "scene", "sceneId": "sub-hall", "arrival": { "position": [x, y, z], "yaw": 0, "pitch": 0 } }` | 別の3DGSに移動し、`arrival` の位置・向きから表示 |
 | `mesh` | `{ "type": "mesh", "url": "doki-opt.glb", "exposure": 1 }` | 3Dモデル画面（「戻る」付き）。`exposure` は明るさ（省略時 1、暗ければ 1.5 など） |
-| `url` | `{ "type": "url", "url": "https://…" }` | Webページ画面（「戻る」「終了」「新しいタブで開く」付き） |
+| `url` | `{ "type": "url", "url": "https://…" }` | Webページ画面（「戻る」「新しいタブで開く」付き） |
 
 - 3DGS 間の移動に「戻る」ボタンはありません。戻り道は、遷移先のシーンに「出口」（`kind: "exit"`）を置いて作ります。
 - Webページは、埋め込みを拒否しているサイトだと真っ白になります。その場合は「新しいタブで開く」で開いてください。
