@@ -7,14 +7,23 @@ import type { Entrance } from "../core/manifest";
 // opaque geometry) hide them; picking skips coins behind splats as well.
 // Each coin turns towards the camera with a slight fixed tilt so its rim
 // shows, and sits a little in front of its anchor so it does not sink into
-// the surface it was placed on. Its size is proportional to its depth along
-// the view direction (what the perspective projection divides by), so it
-// keeps the same height on screen wherever it appears; scaling by the
-// straight distance instead made coins near the screen edges up to ~1.8x
-// larger. (Near the edges a coin still looks somewhat wider, from the
-// perspective stretch of a coin facing the camera.)
+// the surface it was placed on.
+//
+// Size: farther coins look smaller, as real objects do, but less steeply
+// (DEPTH_FALLOFF < 1) and only between a minimum and a maximum size, so a
+// far coin stays easy to click and a near one does not fill the screen.
+// A constant screen size looked wrong: a far coin appeared as large as a
+// near one. Sizes are angular (fractions of the view depth): the coin's
+// diameter is about ICON_SIZE / (2 tan(fov / 2)) of the view height at
+// REFERENCE_DEPTH. The depth is measured along the view direction, which is
+// what the perspective projection divides by, so the size does not change
+// with the position on screen.
 
-const ICON_SIZE = 0.07; // coin diameter as a fraction of the view depth
+const ICON_SIZE = 0.07; // coin diameter as a fraction of the view depth, at REFERENCE_DEPTH
+const REFERENCE_DEPTH = 3; // scene units (after the scene scale)
+const DEPTH_FALLOFF = 0.6; // 0: constant screen size, 1: fixed size in the scene
+const MIN_ICON_SIZE = 0.035; // smallest, for far coins
+const MAX_ICON_SIZE = 0.12; // largest, for near coins
 const THICKNESS = 0.22; // rim depth relative to the diameter
 const HOVER_SCALE = 1.25;
 const YAW_TILT = (18 * Math.PI) / 180; // shows the rim when viewed head-on
@@ -166,8 +175,13 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
     // (Coins behind the camera are not drawn; the clamp only keeps the scale positive.)
     camera.getWorldDirection(viewDirection);
     const depth = Math.max(-toCamera.dot(viewDirection) * distance, 1e-3);
+    const angular = THREE.MathUtils.clamp(
+      ICON_SIZE * Math.pow(REFERENCE_DEPTH / depth, DEPTH_FALLOFF),
+      MIN_ICON_SIZE,
+      MAX_ICON_SIZE,
+    );
     const hover = coin.userData.entranceId === hoveredId ? HOVER_SCALE : 1;
-    coin.scale.setScalar((ICON_SIZE * depth * hover) / rootScale);
+    coin.scale.setScalar((angular * depth * hover) / rootScale);
   }
 
   function clear(): void {
