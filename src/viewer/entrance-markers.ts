@@ -5,11 +5,16 @@ import type { Entrance } from "../core/manifest";
 // follows the scene transform. The coins are opaque and depth-tested, so the
 // splats of a wall in front (Spark draws splats depth-tested, blended over
 // opaque geometry) hide them; picking skips coins behind splats as well.
-// Each coin keeps a constant screen size, turns towards the camera with a
-// slight fixed tilt so its rim shows, and sits a little in front of its
-// anchor so it does not sink into the surface it was placed on.
+// Each coin turns towards the camera with a slight fixed tilt so its rim
+// shows, and sits a little in front of its anchor so it does not sink into
+// the surface it was placed on. Its size is proportional to its depth along
+// the view direction (what the perspective projection divides by), so it
+// keeps the same height on screen wherever it appears; scaling by the
+// straight distance instead made coins near the screen edges up to ~1.8x
+// larger. (Near the edges a coin still looks somewhat wider, from the
+// perspective stretch of a coin facing the camera.)
 
-const ICON_SIZE = 0.07; // coin diameter as a fraction of the distance
+const ICON_SIZE = 0.07; // coin diameter as a fraction of the view depth
 const THICKNESS = 0.22; // rim depth relative to the diameter
 const HOVER_SCALE = 1.25;
 const YAW_TILT = (18 * Math.PI) / 180; // shows the rim when viewed head-on
@@ -137,6 +142,7 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
 
   const worldAnchor = new THREE.Vector3();
   const toCamera = new THREE.Vector3();
+  const viewDirection = new THREE.Vector3();
   const rootQuaternion = new THREE.Quaternion();
 
   function placeCoin(coin: THREE.Group, camera: THREE.Camera): void {
@@ -157,8 +163,11 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
     root.getWorldQuaternion(rootQuaternion);
     coin.quaternion.copy(rootQuaternion.invert().multiply(worldQuaternion));
 
+    // (Coins behind the camera are not drawn; the clamp only keeps the scale positive.)
+    camera.getWorldDirection(viewDirection);
+    const depth = Math.max(-toCamera.dot(viewDirection) * distance, 1e-3);
     const hover = coin.userData.entranceId === hoveredId ? HOVER_SCALE : 1;
-    coin.scale.setScalar((ICON_SIZE * distance * hover) / rootScale);
+    coin.scale.setScalar((ICON_SIZE * depth * hover) / rootScale);
   }
 
   function clear(): void {
