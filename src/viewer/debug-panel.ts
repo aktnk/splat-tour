@@ -1,7 +1,8 @@
 // Authoring aid shown with ?debug=1 until the editor can export manifests:
 // shows the current view and the scene-local point under a click as JSON
-// ready to paste into the manifest, and levels a tilted scene from three
-// clicks on the floor.
+// ready to paste into the manifest, levels a tilted scene from three clicks
+// on the floor, and saves the current view as an image for an entrance's
+// `preview`.
 
 export interface DebugSnapshot {
   sceneId: string;
@@ -21,7 +22,10 @@ export interface DebugPanel {
   showAlignResult(transformJson: string | null): void;
 }
 
-export function setupDebugPanel(enabled: boolean, handlers: { onAlignStart(): void }): DebugPanel {
+export function setupDebugPanel(
+  enabled: boolean,
+  handlers: { onAlignStart(): void; onCapture(): void },
+): DebugPanel {
   const panel = document.getElementById("debug-panel") as HTMLElement;
   const statsEl = document.getElementById("debug-stats") as HTMLElement;
   const viewEl = document.getElementById("debug-view") as HTMLTextAreaElement;
@@ -37,6 +41,9 @@ export function setupDebugPanel(enabled: boolean, handlers: { onAlignStart(): vo
     el.addEventListener("focus", () => el.select());
   }
   alignBtn.addEventListener("click", () => handlers.onAlignStart());
+  (document.getElementById("debug-capture-btn") as HTMLButtonElement).addEventListener("click", () =>
+    handlers.onCapture(),
+  );
 
   return {
     enabled,

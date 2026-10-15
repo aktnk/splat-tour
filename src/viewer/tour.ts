@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  entranceTargetLabel,
   findScene,
   parseManifest,
   resolveAssetUrl,
@@ -23,6 +24,7 @@ import { setupDebugPanel } from "./debug-panel";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
+import { captureExtension, captureFrame } from "./capture";
 
 // Composition root of the web viewer: loads the manifest, shows the start
 // scene and moves between scenes, the mesh screen and the web screen.
@@ -84,6 +86,7 @@ export async function startTour({
       alignPoints = [];
       debug.showAlignProgress(0);
     },
+    onCapture: () => void saveCapture(),
   });
   const raycaster = new THREE.Raycaster();
 
@@ -113,7 +116,12 @@ export async function startTour({
     markers,
     tooltip,
     occluder: () => splatView.getMesh(),
-    imageUrl: (entrance) => (entrance.image ? assetUrl(entrance.image) : undefined),
+    media: (entrance) => ({
+      imageUrl: entrance.image ? assetUrl(entrance.image) : undefined,
+      preview: entrance.preview
+        ? { url: assetUrl(entrance.preview), label: entranceTargetLabel(manifest, entrance) }
+        : undefined,
+    }),
     isEnabled: () => screen === "scene" && !busy,
     onActivate: (entrance) => void activate(entrance),
     onEmptyClick: (ndc) => {
@@ -165,6 +173,30 @@ export async function startTour({
       `"transform": ${JSON.stringify({ rotation, flipX: false, flipY: false, flipZ: false, scale })}`,
     );
     loop.invalidate();
+  }
+
+  // Debug panel: downloads the current view (or model) without the entrance
+  // icons, sized for an entrance's `preview`.
+  async function saveCapture(): Promise<void> {
+    if (screen === "web") {
+      return;
+    }
+    const blob = await captureFrame(canvas, () => {
+      if (screen === "mesh") {
+        meshScreen.render();
+        return;
+      }
+      markers.setVisible(false);
+      renderer.render(scene, camera);
+      markers.setVisible(true);
+    });
+    // Draw the icons again.
+    loop.invalidate();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${current.id}-${screen === "mesh" ? "model" : "view"}.${captureExtension(blob)}`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
   }
 
   async function loadScene(sceneId: string, view: View): Promise<void> {

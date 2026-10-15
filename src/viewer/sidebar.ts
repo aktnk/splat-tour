@@ -1,4 +1,4 @@
-import type { Entrance, Manifest } from "../core/manifest";
+import { entranceTargetLabel, type Entrance, type Manifest } from "../core/manifest";
 
 // Table of contents of the tour: a drawer on the left, opened with the "☰"
 // button, listing every scene with its entrances. Choosing a scene goes to its
@@ -16,14 +16,6 @@ export interface SidebarHandlers {
   onScene(sceneId: string): void;
   onEntrance(sceneId: string, entrance: Entrance): void;
   onOpenChange?(open: boolean): void;
-}
-
-function targetLabel(manifest: Manifest, entrance: Entrance): string {
-  const { target } = entrance;
-  if (target.type === "scene") {
-    return manifest.scenes.find((s) => s.id === target.sceneId)?.title ?? target.sceneId;
-  }
-  return target.type === "mesh" ? "3Dモデル" : "Webページ";
 }
 
 // Same colours as the coins (entrance-markers.ts).
@@ -74,7 +66,7 @@ export function setupSidebar(manifest: Manifest, handlers: SidebarHandlers): Sid
       title.textContent = entrance.title;
       const target = document.createElement("span");
       target.className = "sidebar-entrance-target";
-      target.textContent = targetLabel(manifest, entrance);
+      target.textContent = entranceTargetLabel(manifest, entrance);
       button.append(badge, title, target);
       button.addEventListener("click", () => {
         setOpen(false);

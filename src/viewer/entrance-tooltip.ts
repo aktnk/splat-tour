@@ -1,11 +1,19 @@
 import type { Entrance } from "../core/manifest";
 
-// Description popup for an entrance (title, text, optional image). On touch
+// Description popup for an entrance (title, text, optional image, optional
+// capture of where it leads). On touch
 // screens it is also how an entrance is opened, via its "開く" button or a
 // second tap on the icon.
 
+export interface TooltipMedia {
+  /** The entrance's own image (`image`). */
+  imageUrl?: string;
+  /** Capture of the destination (`preview`), labelled with where it leads. */
+  preview?: { url: string; label: string };
+}
+
 export interface EntranceTooltip {
-  show(entrance: Entrance, imageUrl: string | undefined): void;
+  show(entrance: Entrance, media: TooltipMedia): void;
   hide(): void;
   current(): Entrance | null;
   /** Screen position (CSS px) of the icon, or null when it is off screen. */
@@ -18,7 +26,16 @@ export function setupEntranceTooltip(onOpen: (entrance: Entrance) => void): Entr
   const titleEl = document.getElementById("tooltip-title") as HTMLElement;
   const descriptionEl = document.getElementById("tooltip-description") as HTMLElement;
   const openBtn = document.getElementById("tooltip-open-btn") as HTMLButtonElement;
+  const previewEl = document.getElementById("tooltip-preview") as HTMLElement;
+  const previewImageEl = document.getElementById("tooltip-preview-image") as HTMLImageElement;
+  const previewLabelEl = document.getElementById("tooltip-preview-label") as HTMLElement;
   let shown: Entrance | null = null;
+  let lastPosition: { x: number; y: number } | null = null;
+
+  // Images change the popup's height once loaded; keep it on screen.
+  for (const img of [imageEl, previewImageEl]) {
+    img.addEventListener("load", () => tooltip.moveTo(lastPosition));
+  }
 
   openBtn.addEventListener("click", () => {
     if (shown) {
@@ -26,8 +43,8 @@ export function setupEntranceTooltip(onOpen: (entrance: Entrance) => void): Entr
     }
   });
 
-  return {
-    show(entrance: Entrance, imageUrl: string | undefined) {
+  const tooltip: EntranceTooltip = {
+    show(entrance: Entrance, { imageUrl, preview }: TooltipMedia) {
       if (shown?.id === entrance.id) {
         return;
       }
@@ -43,6 +60,15 @@ export function setupEntranceTooltip(onOpen: (entrance: Entrance) => void): Entr
         imageEl.removeAttribute("src");
         imageEl.hidden = true;
       }
+      if (preview) {
+        previewImageEl.src = preview.url;
+        previewImageEl.alt = preview.label;
+        previewLabelEl.textContent = preview.label;
+        previewEl.hidden = false;
+      } else {
+        previewImageEl.removeAttribute("src");
+        previewEl.hidden = true;
+      }
       el.hidden = false;
     },
     hide() {
@@ -53,6 +79,7 @@ export function setupEntranceTooltip(onOpen: (entrance: Entrance) => void): Entr
       return shown;
     },
     moveTo(position: { x: number; y: number } | null) {
+      lastPosition = position;
       if (!shown) {
         return;
       }
@@ -69,4 +96,5 @@ export function setupEntranceTooltip(onOpen: (entrance: Entrance) => void): Entr
       el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     },
   };
+  return tooltip;
 }

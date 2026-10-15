@@ -15,3 +15,4 @@ export { setupEntranceMarkers, type EntranceMarkers } from "./entrance-markers";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";
 export { levelingRotation } from "./floor-align";
+export { captureExtension, captureFrame, PREVIEW_HEIGHT, PREVIEW_WIDTH } from "./capture";
