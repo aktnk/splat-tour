@@ -11,6 +11,12 @@
     "./viewer.html": "./viewer/index.html",
     "./viewer.css": "./viewer/style.css"
   },
+  "files": [
+    "src/core",
+    "src/viewer",
+    "viewer/index.html",
+    "viewer/style.css"
+  ],
   "scripts": {
     "dev": "vite --config vite.viewer.config.ts",
     "build": "tsc && vite build --config vite.viewer.config.ts",

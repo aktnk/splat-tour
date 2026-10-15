@@ -58,7 +58,7 @@ URL に `?debug=1` を付けると、右上に manifest を手で書くための
 
 ## 他のプロジェクトから使う
 
-ビューアの部品と manifest の型・検証は、パッケージとして読み込めます（TypeScript のソースのまま提供しているので、Vite などのバンドラーで使ってください）。
+ビューアの部品と manifest の型・検証は、パッケージとして読み込めます（TypeScript のソースのまま提供しているので、Vite などのバンドラーで使ってください）。パッケージに入るのはビューアのソースと画面の HTML・CSS だけです（`package.json` の `files`）。`tours/` やツールは入りません。ツアーのデータを `node_modules` の中に置くと `npm install` のたびに消えるので、必ずその外に置いてください。
 
 ```ts
 import { startTour, setupScene } from "splat-tour";
