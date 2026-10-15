@@ -20,6 +20,7 @@ import { setupMeshScreen } from "./mesh-screen";
 import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
 import { setupDebugPanel } from "./debug-panel";
+import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
 
@@ -136,6 +137,13 @@ export async function startTour({
     onChange: () => loop.invalidate(),
   });
   const overlays = setupOverlayScreens({ onBack: back, onExit: () => void exit() });
+  const sidebar = setupSidebar(manifest, {
+    onScene: (sceneId) => void goToScene(sceneId),
+    onEntrance: (sceneId, entrance) => void openFromSidebar(sceneId, entrance),
+    onOpenChange: (open) => {
+      if (open) interaction.reset();
+    },
+  });
 
   function setSplatControlsEnabled(enabled: boolean): void {
     controls.fpsMovement.enable = enabled;
@@ -168,6 +176,7 @@ export async function startTour({
       interaction.reset();
       markers.setEntrances([], 1);
       status.setTitles(manifest.title, current.title);
+      sidebar.setCurrent(current.id);
       status.setLoading(true);
       loadingShown = true;
       loadStartedAt = performance.now();
@@ -244,6 +253,38 @@ export async function startTour({
     setSplatControlsEnabled(true);
     status.setResetVisible(true);
     loop.invalidate();
+  }
+
+  // From the sidebar: a scene opens at its first view.
+  async function goToScene(sceneId: string): Promise<void> {
+    if (busy) {
+      return;
+    }
+    back();
+    const scene = findScene(manifest, sceneId);
+    if (scene.id !== current.id) {
+      await loadScene(scene.id, scene.initialView);
+      return;
+    }
+    interaction.reset();
+    entryView = scene.initialView;
+    splatView.applyView(scene.initialView);
+    loop.invalidate();
+  }
+
+  // From the sidebar: an entrance does what clicking its icon does. A model or
+  // web page is opened from the scene the entrance is in, so "戻る" returns
+  // there; a scene target is entered directly at its arrival view.
+  async function openFromSidebar(sceneId: string, entrance: Entrance): Promise<void> {
+    if (busy) {
+      return;
+    }
+    back();
+    if (entrance.target.type !== "scene" && sceneId !== current.id) {
+      const scene = findScene(manifest, sceneId);
+      await loadScene(scene.id, scene.initialView);
+    }
+    await activate(entrance);
   }
 
   // Back to the start of the tour.
@@ -333,7 +374,9 @@ export async function startTour({
     if (event.key !== "Escape") {
       return;
     }
-    if (screen !== "scene") {
+    if (sidebar.isOpen()) {
+      sidebar.close();
+    } else if (screen !== "scene") {
       back();
     } else {
       interaction.reset();

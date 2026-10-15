@@ -10,9 +10,19 @@
     <canvas id="viewer-canvas"></canvas>
 
     <header id="tour-header">
+      <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" title="目次">☰</button>
       <h1 id="tour-title"></h1>
       <span id="scene-title"></span>
     </header>
+
+    <div id="sidebar-backdrop" hidden></div>
+    <nav id="sidebar" aria-label="目次" aria-hidden="true">
+      <div id="sidebar-head">
+        <span id="sidebar-title"></span>
+        <button id="sidebar-close" type="button" title="閉じる">×</button>
+      </div>
+      <ul id="sidebar-list"></ul>
+    </nav>
 
     <div id="loading" hidden>
       <div class="spinner"></div>
