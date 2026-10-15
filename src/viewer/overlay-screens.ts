@@ -1,10 +1,11 @@
-// DOM parts shared by the mesh and web screens: the bar with "戻る" / "終了"
-// and the iframe for web pages. Many sites refuse to be framed and there is
-// no reliable way to detect it, so the bar always offers to open the page in
-// a new tab as well.
+// DOM parts shared by the mesh and web screens: the bar with "戻る" (and
+// "終了" on web pages) and the iframe for web pages. Many sites refuse to be
+// framed and there is no reliable way to detect it, so the bar always offers
+// to open the page in a new tab as well. The model screen has "戻る" only.
 
 export interface OverlayScreens {
-  showBar(title: string, externalUrl?: string): void;
+  /** Bar of the model screen: title and "戻る". */
+  showMesh(title: string): void;
   showWeb(url: string, title: string): void;
   hide(): void;
 }
@@ -21,8 +22,9 @@ export function setupOverlayScreens(handlers: { onBack(): void; onExit(): void }
   backBtn.addEventListener("click", () => handlers.onBack());
   exitBtn.addEventListener("click", () => handlers.onExit());
 
-  function showBar(title: string, externalUrl?: string): void {
+  function showBar(title: string, externalUrl: string | undefined, withExit: boolean): void {
     titleEl.textContent = title;
+    exitBtn.hidden = !withExit;
     externalLink.hidden = externalUrl === undefined;
     if (externalUrl) {
       externalLink.href = externalUrl;
@@ -31,11 +33,13 @@ export function setupOverlayScreens(handlers: { onBack(): void; onExit(): void }
   }
 
   return {
-    showBar,
+    showMesh(title: string) {
+      showBar(title, undefined, false);
+    },
     showWeb(url: string, title: string) {
       webFrame.src = url;
       webScreen.hidden = false;
-      showBar(title, url);
+      showBar(title, url, true);
     },
     hide() {
       bar.hidden = true;
