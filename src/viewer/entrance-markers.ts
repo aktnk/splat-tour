@@ -29,19 +29,24 @@ const HOVER_SCALE = 1.25;
 const YAW_TILT = (18 * Math.PI) / 180; // shows the rim when viewed head-on
 const PITCH_FOLLOW = 0.75; // how far the coin tips towards a camera above/below
 const LIFT = 0.06; // offset towards the camera, as a fraction of the distance
+// Coins closer than this (world units) are hidden: after gliding to a
+// viewpoint the camera stands at its icon, which would fill the view.
+const NEAR_HIDE = 0.25;
 
-type IconKind = "entrance" | "exit" | "mesh" | "url";
+type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";
 
 const ICON_STYLE: Record<IconKind, { color: string; rim: string; glyph: string }> = {
   entrance: { color: "#2f6fe0", rim: "#1c4596", glyph: "→" },
   exit: { color: "#e07a2f", rim: "#96501c", glyph: "←" },
   mesh: { color: "#2e9d5b", rim: "#1c6639", glyph: "3D" },
   url: { color: "#8a4fd6", rim: "#58308f", glyph: "Web" },
+  view: { color: "#12a39a", rim: "#0b6a64", glyph: "★" },
 };
 
 function iconKind(entrance: Entrance): IconKind {
   if (entrance.target.type === "mesh") return "mesh";
   if (entrance.target.type === "url") return "url";
+  if (entrance.target.type === "view") return "view";
   return entrance.kind;
 }
 
@@ -162,6 +167,7 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
     toCamera.copy(camera.position).sub(worldAnchor);
     const distance = Math.max(toCamera.length(), 1e-3);
     toCamera.divideScalar(distance);
+    coin.visible = distance > NEAR_HIDE;
 
     // Position: lifted towards the camera, back in root-local coordinates.
     const world = worldAnchor.clone().addScaledVector(toCamera, distance * LIFT);
@@ -214,7 +220,8 @@ export function setupEntranceMarkers(root: THREE.Object3D): EntranceMarkers {
     pick(ndc: THREE.Vector2, camera: THREE.Camera, occluder: THREE.Object3D | null) {
       raycaster.setFromCamera(ndc, camera);
       raycaster.far = Infinity;
-      const hit = raycaster.intersectObjects(group.children, true)[0];
+      // Raycasts ignore `visible`; hidden (too near) coins must not be picked.
+      const hit = raycaster.intersectObjects(group.children.filter((c) => c.visible), true)[0];
       let obj: THREE.Object3D | null = hit?.object ?? null;
       while (obj && obj.userData.entranceId === undefined) {
         obj = obj.parent;
