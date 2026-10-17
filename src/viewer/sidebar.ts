@@ -79,7 +79,8 @@ export function setupSidebar(manifest: Manifest, handlers: SidebarHandlers): Sid
       title.textContent = entrance.title;
       const target = document.createElement("span");
       target.className = "sidebar-entrance-target";
-      target.textContent = entranceTargetLabel(manifest, entrance);
+      // A viewpoint leads nowhere else; its title says enough.
+      target.textContent = entrance.target.type === "view" ? "" : entranceTargetLabel(manifest, entrance);
       button.append(badge, title, target);
       const describes = handlers.describes?.(entrance) ?? false;
       let lastPointer = "mouse";
