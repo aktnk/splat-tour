@@ -78,8 +78,7 @@
         {
           "id": "viewpoint-sample",
           "title": "見どころ（サンプル）",
-          "description": "この場所から展示全体を見渡せます。",
-          "position": [1, 1.5, -1],
+          "description": "この場所から展示全体を見渡せます。詳しくは https://example.com/ をご覧ください。",
           "target": {
             "type": "view",
             "view": { "position": [1, 1.5, -1], "yaw": 135, "pitch": -10 }

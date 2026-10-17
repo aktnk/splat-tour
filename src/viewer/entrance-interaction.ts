@@ -31,12 +31,17 @@ export interface EntranceInteraction {
   reset(): void;
   /** Re-anchors the popup to its icon after the camera moved. */
   updatePopupPosition(): void;
+  /** The popup was hidden or taken over (e.g. by the table of contents). */
+  releasePopup(): void;
 }
 
 export function setupEntranceInteraction(options: EntranceInteractionOptions): EntranceInteraction {
   const { canvas, camera, markers, tooltip } = options;
   let pointerDown: { x: number; y: number } | null = null;
   let pendingHover: PointerEvent | null = null;
+  // Whether the popup on screen was opened here (for an icon), so it follows
+  // the icon; popups opened from the table of contents stay put.
+  let ownPopup = false;
 
   function ndcOf(event: PointerEvent): THREE.Vector2 {
     const rect = canvas.getBoundingClientRect();
@@ -49,6 +54,7 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
   function show(entrance: Entrance): void {
     markers.setHovered(entrance.id);
     tooltip.show(entrance, options.media(entrance));
+    ownPopup = true;
     updatePopupPosition();
     options.onChange();
   }
@@ -61,7 +67,7 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
   }
 
   function updatePopupPosition(): void {
-    const entrance = tooltip.current();
+    const entrance = ownPopup ? tooltip.current() : null;
     const world = entrance ? markers.worldPosition(entrance.id) : undefined;
     if (!world) {
       return;
@@ -95,8 +101,10 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
         if (hit) {
           canvas.style.cursor = "pointer";
           show(hit);
-        } else if (tooltip.current()) {
-          reset();
+        } else if (ownPopup && tooltip.current()) {
+          // A moment to move onto the popup (to click a link in it).
+          canvas.style.cursor = "";
+          tooltip.hideSoon();
         }
       });
     }
@@ -134,5 +142,13 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
     }
   });
 
-  return { reset, updatePopupPosition };
+  return {
+    reset,
+    updatePopupPosition,
+    releasePopup() {
+      ownPopup = false;
+      markers.setHovered(null);
+      canvas.style.cursor = "";
+    },
+  };
 }

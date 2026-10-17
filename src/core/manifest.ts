@@ -49,7 +49,10 @@ export type EntranceTarget =
   | { type: "scene"; sceneId: string; arrival: View }
   | { type: "mesh"; url: string; /** Brightness of the model screen (default 1). */ exposure: number }
   | { type: "url"; url: string }
-  /** A viewpoint in the entrance's own scene: the camera glides there. */
+  /**
+   * A viewpoint in the entrance's own scene: the camera glides there. It has
+   * no icon in the scene; it is listed in the table of contents.
+   */
   | { type: "view"; view: View };
 
 export interface Entrance {
@@ -192,15 +195,20 @@ function entrance(value: unknown, path: string): Entrance {
   if (kind !== "entrance" && kind !== "exit") {
     fail(`${path}.kind`, `"entrance" / "exit" のいずれかである必要があります`);
   }
+  const parsedTarget = target(e.target, `${path}.target`);
   return {
     id: str(e.id, `${path}.id`),
-    position: vec3(e.position, `${path}.position`),
+    // Viewpoints have no icon, so their position may be left out.
+    position:
+      e.position === undefined && parsedTarget.type === "view"
+        ? parsedTarget.view.position
+        : vec3(e.position, `${path}.position`),
     kind,
     title: str(e.title, `${path}.title`),
     description: optStr(e.description, `${path}.description`, ""),
     image: e.image === undefined ? undefined : str(e.image, `${path}.image`),
     preview: e.preview === undefined ? undefined : str(e.preview, `${path}.preview`),
-    target: target(e.target, `${path}.target`),
+    target: parsedTarget,
   };
 }
 

@@ -261,7 +261,7 @@ button {
   background: var(--panel-bg);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 16; /* above the ?debug=1 panel */
+  z-index: 42; /* above the ?debug=1 panel and the table of contents */
 }
 
 #tooltip-image {
@@ -276,6 +276,11 @@ button {
 #tooltip-title {
   margin: 0 0 4px;
   font-size: 16px;
+}
+
+#tooltip-description a {
+  color: #9cc0ff;
+  word-break: break-all;
 }
 
 #tooltip-description {

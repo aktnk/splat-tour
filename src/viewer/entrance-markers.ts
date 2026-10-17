@@ -29,8 +29,8 @@ const HOVER_SCALE = 1.25;
 const YAW_TILT = (18 * Math.PI) / 180; // shows the rim when viewed head-on
 const PITCH_FOLLOW = 0.75; // how far the coin tips towards a camera above/below
 const LIFT = 0.06; // offset towards the camera, as a fraction of the distance
-// Coins closer than this (world units) are hidden: after gliding to a
-// viewpoint the camera stands at its icon, which would fill the view.
+// Coins closer than this (world units) are hidden: a coin the camera stands
+// at would fill the view.
 const NEAR_HIDE = 0.25;
 
 type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";

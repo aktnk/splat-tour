@@ -122,19 +122,26 @@ export async function startTour({
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
 
-  const tooltip = setupEntranceTooltip((entrance) => void activate(entrance));
+  const media = (entrance: Entrance) => ({
+    imageUrl: entrance.image ? assetUrl(entrance.image) : undefined,
+    preview: entrance.preview
+      ? { url: assetUrl(entrance.preview), label: entranceTargetLabel(manifest, entrance) }
+      : undefined,
+  });
+  const tooltip = setupEntranceTooltip({
+    onOpen: (entrance) => void openEntrance(entrance),
+    onHide: () => {
+      interaction.releasePopup();
+      loop.invalidate();
+    },
+  });
   const interaction = setupEntranceInteraction({
     canvas,
     camera,
     markers,
     tooltip,
     occluder: () => splatView.getMesh(),
-    media: (entrance) => ({
-      imageUrl: entrance.image ? assetUrl(entrance.image) : undefined,
-      preview: entrance.preview
-        ? { url: assetUrl(entrance.preview), label: entranceTargetLabel(manifest, entrance) }
-        : undefined,
-    }),
+    media,
     isEnabled: () => screen === "scene" && !busy,
     onActivate: (entrance) => void activate(entrance),
     onEmptyClick: (ndc) => {
@@ -160,10 +167,21 @@ export async function startTour({
   const overlays = setupOverlayScreens({ onBack: back });
   const sidebar = setupSidebar(manifest, {
     onScene: (sceneId) => void goToScene(sceneId),
-    onEntrance: (sceneId, entrance) => void openFromSidebar(sceneId, entrance),
-    onOpenChange: (open) => {
-      if (open) interaction.reset();
+    onEntrance: (sceneId, entrance) => {
+      tooltip.hide();
+      void openFromSidebar(sceneId, entrance);
     },
+    onOpenChange: () => interaction.reset(),
+    // Viewpoints have no icon in the scene: their description shows beside
+    // their row in the table of contents instead.
+    describes: (entrance) => entrance.target.type === "view",
+    onDescribe: (entrance, row) => {
+      interaction.releasePopup();
+      tooltip.show(entrance, media(entrance));
+      tooltip.placeBeside(row.getBoundingClientRect());
+    },
+    onDescribeEnd: () => tooltip.hideSoon(),
+    isDescribing: (entrance) => tooltip.current() === entrance,
   });
 
   function setSplatControlsEnabled(enabled: boolean): void {
@@ -239,7 +257,11 @@ export async function startTour({
       const loading = splatView.load(current, splatUrl);
       splatView.applyView(view);
       await loading;
-      markers.setEntrances(current.entrances, current.transform.scale);
+      // Viewpoints have no icon; they are reached from the table of contents.
+      markers.setEntrances(
+        current.entrances.filter((e) => e.target.type !== "view"),
+        current.transform.scale,
+      );
     } catch (err) {
       status.showError(`「${current.title}」を読み込めません: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -326,6 +348,19 @@ export async function startTour({
       duration: THREE.MathUtils.clamp(distance * GLIDE_MS_PER_UNIT, GLIDE_MIN_MS, GLIDE_MAX_MS),
     };
     loop.invalidate();
+  }
+
+  // "開く" in the popup, which may come from the table of contents and so
+  // belong to another scene.
+  async function openEntrance(entrance: Entrance): Promise<void> {
+    sidebar.close();
+    tooltip.hide();
+    const scene = manifest.scenes.find((s) => s.entrances.includes(entrance));
+    if (!scene || scene.id === current.id) {
+      await activate(entrance);
+    } else {
+      await openFromSidebar(scene.id, entrance);
+    }
   }
 
   // From the sidebar: a scene opens at its first view.
