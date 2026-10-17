@@ -34,6 +34,10 @@ const BASE_JOYSTICK_SPEED = 2.0;
 // Hide the loading indicator even if the initial view shows no splats.
 const LOADING_TIMEOUT_MS = 8000;
 const DEBUG_UPDATE_MS = 500;
+// Gliding to a viewpoint ("view" entrances): duration grows with distance.
+const GLIDE_MIN_MS = 700;
+const GLIDE_MAX_MS = 1800;
+const GLIDE_MS_PER_UNIT = 250;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -106,6 +110,15 @@ export async function startTour({
   // Floor points collected by the debug panel's floor alignment, or null.
   let alignPoints: Vec3[] | null = null;
   let lastDebugUpdate = 0;
+  // The camera's glide to a viewpoint, while it lasts.
+  let glide: {
+    fromPosition: THREE.Vector3;
+    fromQuaternion: THREE.Quaternion;
+    toPosition: THREE.Vector3;
+    toQuaternion: THREE.Quaternion;
+    start: number;
+    duration: number;
+  } | null = null;
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
 
@@ -209,6 +222,7 @@ export async function startTour({
       current = findScene(manifest, sceneId);
       entryView = view;
       alignPoints = null;
+      glide = null;
       interaction.reset();
       markers.setEntrances([], 1);
       status.setTitles(manifest.title, current.title);
@@ -239,6 +253,7 @@ export async function startTour({
       return;
     }
     interaction.reset();
+    glide = null;
     splatView.applyView(entryView);
     loop.invalidate();
   }
@@ -251,6 +266,10 @@ export async function startTour({
     const { target } = entrance;
     if (target.type === "scene") {
       await loadScene(target.sceneId, target.arrival);
+      return;
+    }
+    if (target.type === "view") {
+      glideTo(target.view);
       return;
     }
     setSplatControlsEnabled(false);
@@ -291,6 +310,24 @@ export async function startTour({
     loop.invalidate();
   }
 
+  // Moves the camera smoothly to a viewpoint of the current scene.
+  function glideTo(view: View): void {
+    const toPosition = splatView.root.localToWorld(new THREE.Vector3(...view.position));
+    const toQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler((view.pitch * Math.PI) / 180, (view.yaw * Math.PI) / 180, 0, "YXZ"),
+    );
+    const distance = camera.position.distanceTo(toPosition);
+    glide = {
+      fromPosition: camera.position.clone(),
+      fromQuaternion: camera.quaternion.clone(),
+      toPosition,
+      toQuaternion,
+      start: performance.now(),
+      duration: THREE.MathUtils.clamp(distance * GLIDE_MS_PER_UNIT, GLIDE_MIN_MS, GLIDE_MAX_MS),
+    };
+    loop.invalidate();
+  }
+
   // From the sidebar: a scene opens at its first view.
   async function goToScene(sceneId: string): Promise<void> {
     if (busy) {
@@ -316,7 +353,15 @@ export async function startTour({
       return;
     }
     back();
-    if (entrance.target.type !== "scene" && sceneId !== current.id) {
+    const { target } = entrance;
+    if (target.type === "view" && sceneId !== current.id) {
+      // Open the other scene right at the viewpoint; "初期位置" stays its first view.
+      const scene = findScene(manifest, sceneId);
+      await loadScene(scene.id, target.view);
+      entryView = scene.initialView;
+      return;
+    }
+    if (target.type !== "scene" && sceneId !== current.id) {
       const scene = findScene(manifest, sceneId);
       await loadScene(scene.id, scene.initialView);
     }
@@ -326,9 +371,22 @@ export async function startTour({
   function tickScene(): boolean {
     const move = joystick.getMoveVector();
     const speed = BASE_JOYSTICK_SPEED * current.camera.moveSpeed;
-    controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
-    controls.update(camera);
-    splatView.clampCamera(current.bounds);
+    if (glide) {
+      // Input waits until the glide ends; bounds are not applied meanwhile.
+      const t = Math.min((performance.now() - glide.start) / glide.duration, 1);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      camera.position.lerpVectors(glide.fromPosition, glide.toPosition, eased);
+      camera.quaternion.slerpQuaternions(glide.fromQuaternion, glide.toQuaternion, eased);
+      if (t >= 1) {
+        glide = null;
+        // Spark's controls measure time since their last update.
+        controls.sparkControls.lastTime = 0;
+      }
+    } else {
+      controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
+      controls.update(camera);
+      splatView.clampCamera(current.bounds);
+    }
 
     const moved =
       camera.position.distanceToSquared(lastPosition) > 1e-12 ||

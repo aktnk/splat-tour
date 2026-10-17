@@ -48,7 +48,9 @@ export interface CameraSettings {
 export type EntranceTarget =
   | { type: "scene"; sceneId: string; arrival: View }
   | { type: "mesh"; url: string; /** Brightness of the model screen (default 1). */ exposure: number }
-  | { type: "url"; url: string };
+  | { type: "url"; url: string }
+  /** A viewpoint in the entrance's own scene: the camera glides there. */
+  | { type: "view"; view: View };
 
 export interface Entrance {
   id: string;
@@ -177,8 +179,10 @@ function target(value: unknown, path: string): EntranceTarget {
       return { type: "mesh", url: str(t.url, `${path}.url`), exposure: num(t.exposure, `${path}.exposure`, 1) };
     case "url":
       return { type: "url", url: str(t.url, `${path}.url`) };
+    case "view":
+      return { type: "view", view: view(t.view, `${path}.view`) };
     default:
-      return fail(`${path}.type`, `"scene" / "mesh" / "url" のいずれかである必要があります`);
+      return fail(`${path}.type`, `"scene" / "mesh" / "url" / "view" のいずれかである必要があります`);
   }
 }
 
@@ -296,6 +300,7 @@ export function entranceTargetLabel(manifest: Manifest, entrance: Entrance): str
   if (target.type === "scene") {
     return manifest.scenes.find((s) => s.id === target.sceneId)?.title ?? target.sceneId;
   }
+  if (target.type === "view") return "この場所からの眺め";
   return target.type === "mesh" ? "3Dモデル" : "Webページ";
 }
 

@@ -193,6 +193,9 @@ button {
 .sidebar-badge.url {
   background: #8a4fd6;
 }
+.sidebar-badge.view {
+  background: #12a39a;
+}
 
 #tour-title {
   margin: 0;
@@ -258,7 +261,7 @@ button {
   background: var(--panel-bg);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 10;
+  z-index: 16; /* above the ?debug=1 panel */
 }
 
 #tooltip-image {
