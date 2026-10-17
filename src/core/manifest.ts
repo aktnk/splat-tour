@@ -118,6 +118,18 @@ function str(value: unknown, path: string): string {
   return value;
 }
 
+// A web page target is shown in an iframe and as a link, so other schemes
+// (javascript: in particular, which would run on the viewer's site) are
+// refused. Parsed like the browser does, which ignores e.g. leading spaces.
+function webPageUrl(value: unknown, path: string): string {
+  const url = str(value, path);
+  const { protocol } = new URL(url, "https://relative.invalid/");
+  if (protocol !== "http:" && protocol !== "https:") {
+    fail(path, "http:// か https:// で始まる URL（または相対パス）である必要があります");
+  }
+  return url;
+}
+
 function optStr(value: unknown, path: string, fallback: string): string {
   return value === undefined ? fallback : typeof value === "string" ? value : fail(path, "文字列である必要があります");
 }
@@ -181,7 +193,7 @@ function target(value: unknown, path: string): EntranceTarget {
     case "mesh":
       return { type: "mesh", url: str(t.url, `${path}.url`), exposure: num(t.exposure, `${path}.exposure`, 1) };
     case "url":
-      return { type: "url", url: str(t.url, `${path}.url`) };
+      return { type: "url", url: webPageUrl(t.url, `${path}.url`) };
     case "view":
       return { type: "view", view: view(t.view, `${path}.view`) };
     default:

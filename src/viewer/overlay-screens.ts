@@ -1,7 +1,8 @@
 // DOM parts shared by the mesh and web screens: the bar with "戻る" and the
 // iframe for web pages. Many sites refuse to be framed and there is no
 // reliable way to detect it, so on web pages the bar also offers to open the
-// page in a new tab.
+// page in a new tab. The iframe is sandboxed (viewer/index.html) so a page
+// cannot navigate the viewer away.
 
 export interface OverlayScreens {
   /** Bar of the model screen: title and "戻る". */
