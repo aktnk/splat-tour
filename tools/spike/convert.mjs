@@ -109,21 +109,26 @@ function parseArgs(argv) {
 }
 
 // Node refuses to spawn .cmd files without a shell on Windows, so npx needs
-// shell mode there, which in turn needs quoted arguments.
-function run(cmd, args, options = {}) {
+// shell mode there, which in turn needs one command string with quoted
+// arguments (args with shell mode are deprecated, DEP0190).
+function spawn(cmd, args, options) {
   const quote = (s) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
+  return isWindows
+    ? spawnSync([cmd, ...args].map(quote).join(" "), { ...options, shell: true })
+    : spawnSync(cmd, args, options);
+}
+
+function run(cmd, args, options = {}) {
   const started = Date.now();
   console.log(`\n$ ${[cmd, ...args].join(" ")}`);
-  const result = isWindows
-    ? spawnSync([cmd, ...args].map(quote).join(" "), { stdio: "inherit", shell: true, ...options })
-    : spawnSync(cmd, args, { stdio: "inherit", ...options });
+  const result = spawn(cmd, args, { stdio: "inherit", ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${cmd} exited with status ${result.status}`);
   return (Date.now() - started) / 1000;
 }
 
 function hasCommand(cmd) {
-  const result = spawnSync(cmd, ["--version"], { stdio: "ignore", shell: isWindows });
+  const result = spawn(cmd, ["--version"], { stdio: "ignore" });
   return result.status === 0;
 }
 

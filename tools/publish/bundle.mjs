@@ -24,7 +24,6 @@ const PAGES_FILE_LIMIT = 25 * 1024 * 1024;
 const PAGES_FILE_COUNT_LIMIT = 20000;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const isWindows = process.platform === "win32";
 
 function parseArgs(argv) {
   const opts = { tour: "tours/sample", out: "dist-publish", assetBaseUrl: null, allowIndexing: false, skipBuild: false };
@@ -94,7 +93,9 @@ function main() {
   const assetDir = join(tourDir, opts.assetBaseUrl ? "assets" : assetBase);
 
   if (!opts.skipBuild) {
-    const result = spawnSync("npm", ["run", "viewer:build"], { cwd: repoRoot, stdio: "inherit", shell: isWindows });
+    // npm is npm.cmd on Windows, which only runs through a shell; one command
+    // string, since args with shell mode are deprecated (DEP0190).
+    const result = spawnSync("npm run viewer:build", { cwd: repoRoot, stdio: "inherit", shell: true });
     if (result.status !== 0) throw new Error("npm run viewer:build に失敗しました");
   }
   const viewerDir = join(repoRoot, "dist-viewer");
