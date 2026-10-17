@@ -16,6 +16,14 @@ export interface SidebarHandlers {
   onScene(sceneId: string): void;
   onEntrance(sceneId: string, entrance: Entrance): void;
   onOpenChange?(open: boolean): void;
+  /**
+   * Rows whose description shows beside them: on mouse hover, or on the
+   * first tap on touch screens (the second tap, or "開く", opens).
+   */
+  describes?(entrance: Entrance): boolean;
+  onDescribe?(entrance: Entrance, row: HTMLElement): void;
+  onDescribeEnd?(): void;
+  isDescribing?(entrance: Entrance): boolean;
 }
 
 // Same colours as the coins (entrance-markers.ts).
@@ -73,7 +81,24 @@ export function setupSidebar(manifest: Manifest, handlers: SidebarHandlers): Sid
       target.className = "sidebar-entrance-target";
       target.textContent = entranceTargetLabel(manifest, entrance);
       button.append(badge, title, target);
+      const describes = handlers.describes?.(entrance) ?? false;
+      let lastPointer = "mouse";
+      button.addEventListener("pointerdown", (event) => {
+        lastPointer = event.pointerType;
+      });
+      if (describes) {
+        button.addEventListener("pointerenter", (event) => {
+          if (event.pointerType === "mouse") handlers.onDescribe?.(entrance, button);
+        });
+        button.addEventListener("pointerleave", (event) => {
+          if (event.pointerType === "mouse") handlers.onDescribeEnd?.();
+        });
+      }
       button.addEventListener("click", () => {
+        if (describes && lastPointer !== "mouse" && !handlers.isDescribing?.(entrance)) {
+          handlers.onDescribe?.(entrance, button);
+          return;
+        }
         setOpen(false);
         handlers.onEntrance(scene.id, entrance);
       });
