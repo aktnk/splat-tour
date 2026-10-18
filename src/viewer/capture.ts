@@ -1,5 +1,5 @@
 // Captures what the canvas shows as a small image, e.g. the arrival view of
-// an entrance for its hover popup (`preview` in the manifest). The WebGL
+// an entrance for its hover popup (`autoThumbnail` in the manifest). The WebGL
 // canvas keeps no drawing buffer between frames, so `draw` renders a frame
 // and the image is copied in the same task, before the browser clears it.
 

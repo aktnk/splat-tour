@@ -62,10 +62,18 @@ export interface Entrance {
   kind: "entrance" | "exit";
   title: string;
   description: string;
-  /** Optional image shown on hover, relative to assetBaseUrl. */
-  image?: string;
-  /** Optional capture of where the entrance leads (e.g. the arrival view), shown on hover. */
-  preview?: string;
+  /**
+   * Image chosen by the author for the popup, relative to assetBaseUrl (or an
+   * absolute URL). Shown instead of autoThumbnail. Read from the former
+   * `image` too.
+   */
+  thumbnail?: string;
+  /**
+   * Image made by the tools: a capture of where the entrance leads (e.g. its
+   * arrival view), or the OGP image of an external web page (an absolute
+   * URL). Read from the former `preview` too.
+   */
+  autoThumbnail?: string;
   target: EntranceTarget;
 }
 
@@ -126,6 +134,22 @@ function webPageUrl(value: unknown, path: string): string {
   const { protocol } = new URL(url, "https://relative.invalid/");
   if (protocol !== "http:" && protocol !== "https:") {
     fail(path, "http:// か https:// で始まる URL（または相対パス）である必要があります");
+  }
+  return url;
+}
+
+// An optional image path; the former name is read when the new one is absent.
+function optImage(e: Json, key: string, formerKey: string, path: string): string | undefined {
+  const name = e[key] !== undefined ? key : formerKey;
+  return e[name] === undefined ? undefined : imageUrl(e[name], `${path}.${name}`);
+}
+
+// Images are relative paths or http(s) URLs.
+function imageUrl(value: unknown, path: string): string {
+  const url = str(value, path);
+  const { protocol } = new URL(url, "https://relative.invalid/");
+  if (protocol !== "http:" && protocol !== "https:") {
+    fail(path, "相対パスか http:// / https:// の URL である必要があります");
   }
   return url;
 }
@@ -218,8 +242,8 @@ function entrance(value: unknown, path: string): Entrance {
     kind,
     title: str(e.title, `${path}.title`),
     description: optStr(e.description, `${path}.description`, ""),
-    image: e.image === undefined ? undefined : str(e.image, `${path}.image`),
-    preview: e.preview === undefined ? undefined : str(e.preview, `${path}.preview`),
+    thumbnail: optImage(e, "thumbnail", "image", path),
+    autoThumbnail: optImage(e, "autoThumbnail", "preview", path),
     target: parsedTarget,
   };
 }
@@ -334,4 +358,20 @@ export function resolveAssetUrl(manifest: Manifest, manifestUrl: string, path: s
     base.pathname += "/";
   }
   return new URL(path, base).href;
+}
+
+/** Whether a web page target is on another site (an absolute URL), not in the tour's own folder. */
+export function isExternalPage(target: EntranceTarget): boolean {
+  return target.type === "url" && /^[a-z][a-z0-9+.-]*:|^\/\//i.test(target.url.trim());
+}
+
+/**
+ * The image an entrance's popup shows, if any: the author's thumbnail before
+ * the automatic one. An external web page shows only its OGP image (the
+ * automatic one), a page of the tour's own site only the author's.
+ */
+export function entranceThumbnail(entrance: Entrance): string | undefined {
+  if (isExternalPage(entrance.target)) return entrance.autoThumbnail;
+  if (entrance.target.type === "url") return entrance.thumbnail;
+  return entrance.thumbnail ?? entrance.autoThumbnail;
 }

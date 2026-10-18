@@ -47,8 +47,10 @@ function referencedAssets(manifest) {
   for (const scene of manifest.scenes ?? []) {
     if (scene.splat?.url) paths.add(scene.splat.url);
     for (const entrance of scene.entrances ?? []) {
-      if (entrance.image) paths.add(entrance.image);
-      if (entrance.preview) paths.add(entrance.preview);
+      // thumbnail / autoThumbnail, or their former names image / preview.
+      for (const key of ["thumbnail", "autoThumbnail", "image", "preview"]) {
+        if (entrance[key]) paths.add(entrance[key]);
+      }
       if (entrance.target?.type === "mesh" && entrance.target.url) paths.add(entrance.target.url);
     }
   }
