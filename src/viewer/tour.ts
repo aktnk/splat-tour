@@ -22,8 +22,10 @@ import { setupEntranceInteraction } from "./entrance-interaction";
 import { setupMeshScreen } from "./mesh-screen";
 import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
-import { setupCollisionOverlay } from "./collision-overlay";
+import { setupCollisionOverlay, setupVoxelOverlay } from "./collision-overlay";
 import { setupDebugPanel } from "./debug-panel";
+import { parseVoxelGrid } from "./voxel-grid";
+import { setupWalker } from "./walk";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
@@ -96,9 +98,30 @@ export async function startTour({
     onCapture: () => void saveCapture(),
     onCollisionFile: (file) => collisionOverlay.load(file),
     onCollisionOptions: (options) => collisionOverlay.setOptions(options),
+    onVoxelFiles: async (json, bin) => {
+      const grid = parseVoxelGrid(JSON.parse(await json.text()), await bin.arrayBuffer());
+      walker.setGrid(grid, splatView.root);
+      const mb = ((json.size + bin.size) / 1e6).toFixed(1);
+      return `ボクセル ${grid.resolution} | ${mb} MB | 「歩く」で床の上を歩きます`;
+    },
+    onWalkSettings: (settings) => {
+      walker.setOptions(settings);
+      walker.setEnabled(settings.walking);
+      showVoxels = settings.showVoxels;
+      voxelCenter = null;
+      if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
+      loop.invalidate();
+    },
   });
   // Only used with ?debug=1; cleared when another scene loads.
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
+  // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.
+  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.25, stepHeight: 0.35 });
+  const voxelOverlay = setupVoxelOverlay(splatView.root, () => loop.invalidate());
+  let showVoxels = false;
+  // Scene-local point the shown voxels are around, refreshed as the camera moves.
+  let voxelCenter: THREE.Vector3 | null = null;
+  let lastTick = performance.now();
   const raycaster = new THREE.Raycaster();
 
   let screen: Screen = "scene";
@@ -255,6 +278,8 @@ export async function startTour({
       interaction.reset();
       markers.setEntrances([], 1);
       collisionOverlay.clear();
+      walker.setGrid(null, null);
+      voxelOverlay.show(null, new THREE.Vector3());
       status.setTitles(manifest.title, current.title);
       sidebar.setCurrent(current.id);
       status.setLoading(true);
@@ -416,6 +441,10 @@ export async function startTour({
   }
 
   function tickScene(): boolean {
+    const now = performance.now();
+    const dt = Math.min((now - lastTick) / 1000, 0.1);
+    lastTick = now;
+    let settling = false;
     const move = joystick.getMoveVector();
     const speed = BASE_JOYSTICK_SPEED * current.camera.moveSpeed;
     if (glide) {
@@ -430,10 +459,13 @@ export async function startTour({
         controls.sparkControls.lastTime = 0;
       }
     } else {
+      const previous = camera.position.clone();
       controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
       controls.update(camera);
       splatView.clampCamera(current.bounds);
+      settling = walker.constrain(camera, previous, dt);
     }
+    if (showVoxels) updateVoxelOverlay();
 
     const moved =
       camera.position.distanceToSquared(lastPosition) > 1e-12 ||
@@ -453,7 +485,19 @@ export async function startTour({
     }
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
-    return moved || busy || loading || splatView.isStreaming();
+    return moved || settling || busy || loading || splatView.isStreaming();
+  }
+
+  // Redraws the voxels near the camera once it has moved a few voxels away.
+  function updateVoxelOverlay(): void {
+    const center = splatView.root.worldToLocal(camera.position.clone());
+    if (voxelCenter && voxelCenter.distanceTo(center) < 0.5) return;
+    voxelCenter = center;
+    voxelOverlay.show(walker.grid(), center);
+    const ground = walker.groundAt(camera.position);
+    debug.showWalkInfo(
+      ground === null ? "足元に床が見つかりません" : `足元の床 y=${ground.toFixed(2)}（目の高さまで ${(camera.position.y - ground).toFixed(2)}）`,
+    );
   }
 
   function updateDebug(force: boolean): void {
