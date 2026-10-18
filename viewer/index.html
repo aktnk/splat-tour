@@ -32,12 +32,11 @@
     <button id="reset-view-btn" type="button" title="このシーンの最初の位置に戻る">⟲ 初期位置</button>
 
     <div id="tooltip" hidden>
-      <img id="tooltip-image" alt="" hidden />
       <h2 id="tooltip-title"></h2>
       <p id="tooltip-description"></p>
-      <figure id="tooltip-preview" hidden>
-        <img id="tooltip-preview-image" alt="" />
-        <figcaption>移動先: <span id="tooltip-preview-label"></span></figcaption>
+      <figure id="tooltip-thumbnail" hidden>
+        <img id="tooltip-thumbnail-image" alt="" referrerpolicy="no-referrer" />
+        <figcaption>移動先: <span id="tooltip-thumbnail-label"></span></figcaption>
       </figure>
       <button id="tooltip-open-btn" type="button">開く</button>
     </div>
@@ -70,7 +69,7 @@
         <textarea id="debug-point" rows="1" readonly></textarea>
       </label>
       <button id="debug-align-btn" type="button">床合わせ（床を3点クリック）</button>
-      <button id="debug-capture-btn" type="button" title="入口の preview（移動先の画像）用。アイコンは写りません">今の画面を画像で保存</button>
+      <button id="debug-capture-btn" type="button" title="入口のサムネイル（thumbnail / autoThumbnail）用。アイコンは写りません">今の画面を画像で保存</button>
       <span id="debug-align-status"></span>
       <textarea id="debug-transform" rows="2" readonly hidden></textarea>
     </div>

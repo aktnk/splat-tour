@@ -2,7 +2,7 @@
 // shows the current view and the scene-local point under a click as JSON
 // ready to paste into the manifest, levels a tilted scene from three clicks
 // on the floor, and saves the current view as an image for an entrance's
-// `preview`.
+// thumbnail.
 
 export interface DebugSnapshot {
   sceneId: string;

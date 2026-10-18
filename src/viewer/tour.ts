@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import {
   entranceTargetLabel,
+  entranceThumbnail,
   findScene,
+  isExternalPage,
   parseManifest,
   resolveAssetUrl,
   type Entrance,
@@ -122,12 +124,16 @@ export async function startTour({
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
 
-  const media = (entrance: Entrance) => ({
-    imageUrl: entrance.image ? assetUrl(entrance.image) : undefined,
-    preview: entrance.preview
-      ? { url: assetUrl(entrance.preview), label: entranceTargetLabel(manifest, entrance) }
-      : undefined,
-  });
+  const media = (entrance: Entrance) => {
+    const thumbnail = entranceThumbnail(entrance);
+    const { target } = entrance;
+    // An external page is labelled with its site.
+    const label =
+      target.type === "url" && isExternalPage(target)
+        ? new URL(target.url, window.location.href).host
+        : entranceTargetLabel(manifest, entrance);
+    return { thumbnail: thumbnail ? { url: assetUrl(thumbnail), label } : undefined };
+  };
   const tooltip = setupEntranceTooltip({
     onOpen: (entrance) => void openEntrance(entrance),
     onHide: () => {
@@ -207,7 +213,7 @@ export async function startTour({
   }
 
   // Debug panel: downloads the current view (or model) without the entrance
-  // icons, sized for an entrance's `preview`.
+  // icons, sized for an entrance's thumbnail.
   async function saveCapture(): Promise<void> {
     if (screen === "web") {
       return;

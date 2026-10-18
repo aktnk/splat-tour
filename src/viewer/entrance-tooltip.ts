@@ -1,7 +1,7 @@
 import type { Entrance } from "../core/manifest";
 
-// Description popup for an entrance (title, text, optional image, optional
-// capture of where it leads). On touch screens it is also how an entrance is
+// Description popup for an entrance (title, text, and one optional image of
+// where it leads, see entranceThumbnail in the manifest). On touch screens it is also how an entrance is
 // opened, via its "開く" button or a second tap. URLs in the description
 // become links that open in a new tab.
 //
@@ -11,10 +11,8 @@ import type { Entrance } from "../core/manifest";
 // its links can be clicked.
 
 export interface TooltipMedia {
-  /** The entrance's own image (`image`). */
-  imageUrl?: string;
-  /** Capture of the destination (`preview`), labelled with where it leads. */
-  preview?: { url: string; label: string };
+  /** Image of where the entrance leads, labelled with where that is. */
+  thumbnail?: { url: string; label: string };
 }
 
 export interface EntranceTooltip {
@@ -58,22 +56,24 @@ function linkify(target: HTMLElement, text: string): void {
 
 export function setupEntranceTooltip({ onOpen, onHide }: TooltipHandlers): EntranceTooltip {
   const el = document.getElementById("tooltip") as HTMLElement;
-  const imageEl = document.getElementById("tooltip-image") as HTMLImageElement;
   const titleEl = document.getElementById("tooltip-title") as HTMLElement;
   const descriptionEl = document.getElementById("tooltip-description") as HTMLElement;
   const openBtn = document.getElementById("tooltip-open-btn") as HTMLButtonElement;
-  const previewEl = document.getElementById("tooltip-preview") as HTMLElement;
-  const previewImageEl = document.getElementById("tooltip-preview-image") as HTMLImageElement;
-  const previewLabelEl = document.getElementById("tooltip-preview-label") as HTMLElement;
+  const thumbnailEl = document.getElementById("tooltip-thumbnail") as HTMLElement;
+  const thumbnailImageEl = document.getElementById("tooltip-thumbnail-image") as HTMLImageElement;
+  const thumbnailLabelEl = document.getElementById("tooltip-thumbnail-label") as HTMLElement;
   let shown: Entrance | null = null;
   // Where the popup was last placed, to keep it on screen when images load.
   let placement: { point: { x: number; y: number } | null } | { beside: DOMRect } = { point: null };
   let hideTimer = 0;
   let pointerOver = false;
 
-  for (const img of [imageEl, previewImageEl]) {
-    img.addEventListener("load", () => place());
-  }
+  thumbnailImageEl.addEventListener("load", () => place());
+  // E.g. an external site's OGP image that has gone.
+  thumbnailImageEl.addEventListener("error", () => {
+    thumbnailEl.hidden = true;
+    place();
+  });
   openBtn.addEventListener("click", () => {
     if (shown) {
       onOpen(shown);
@@ -123,7 +123,7 @@ export function setupEntranceTooltip({ onOpen, onHide }: TooltipHandlers): Entra
   }
 
   const tooltip: EntranceTooltip = {
-    show(entrance: Entrance, { imageUrl, preview }: TooltipMedia) {
+    show(entrance: Entrance, { thumbnail }: TooltipMedia) {
       window.clearTimeout(hideTimer);
       if (shown?.id === entrance.id) {
         return;
@@ -132,22 +132,14 @@ export function setupEntranceTooltip({ onOpen, onHide }: TooltipHandlers): Entra
       titleEl.textContent = entrance.title;
       linkify(descriptionEl, entrance.description);
       descriptionEl.hidden = entrance.description === "";
-      if (imageUrl) {
-        imageEl.src = imageUrl;
-        imageEl.alt = entrance.title;
-        imageEl.hidden = false;
+      if (thumbnail) {
+        thumbnailImageEl.src = thumbnail.url;
+        thumbnailImageEl.alt = thumbnail.label;
+        thumbnailLabelEl.textContent = thumbnail.label;
+        thumbnailEl.hidden = false;
       } else {
-        imageEl.removeAttribute("src");
-        imageEl.hidden = true;
-      }
-      if (preview) {
-        previewImageEl.src = preview.url;
-        previewImageEl.alt = preview.label;
-        previewLabelEl.textContent = preview.label;
-        previewEl.hidden = false;
-      } else {
-        previewImageEl.removeAttribute("src");
-        previewEl.hidden = true;
+        thumbnailImageEl.removeAttribute("src");
+        thumbnailEl.hidden = true;
       }
       el.hidden = false;
     },
