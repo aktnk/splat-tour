@@ -22,6 +22,7 @@ import { setupEntranceInteraction } from "./entrance-interaction";
 import { setupMeshScreen } from "./mesh-screen";
 import { setupOverlayScreens } from "./overlay-screens";
 import { setupStatusOverlay } from "./status-overlay";
+import { setupCollisionOverlay } from "./collision-overlay";
 import { setupDebugPanel } from "./debug-panel";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
@@ -93,7 +94,11 @@ export async function startTour({
       debug.showAlignProgress(0);
     },
     onCapture: () => void saveCapture(),
+    onCollisionFile: (file) => collisionOverlay.load(file),
+    onCollisionOptions: (options) => collisionOverlay.setOptions(options),
   });
+  // Only used with ?debug=1; cleared when another scene loads.
+  const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   const raycaster = new THREE.Raycaster();
 
   let screen: Screen = "scene";
@@ -249,6 +254,7 @@ export async function startTour({
       glide = null;
       interaction.reset();
       markers.setEntrances([], 1);
+      collisionOverlay.clear();
       status.setTitles(manifest.title, current.title);
       sidebar.setCurrent(current.id);
       status.setLoading(true);
