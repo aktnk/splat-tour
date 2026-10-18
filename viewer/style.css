@@ -397,6 +397,25 @@ button {
   color: var(--muted);
 }
 
+#debug-collision summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+#debug-collision-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 4px 10px;
+  margin: 4px 0;
+}
+
+#debug-panel label.debug-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
 #debug-panel textarea {
   font-family: ui-monospace, monospace;
   font-size: 11px;

@@ -72,6 +72,24 @@
       <button id="debug-capture-btn" type="button" title="入口のサムネイル（thumbnail / autoThumbnail）用。アイコンは写りません">今の画面を画像で保存</button>
       <span id="debug-align-status"></span>
       <textarea id="debug-transform" rows="2" readonly hidden></textarea>
+      <details id="debug-collision">
+        <summary>当たり判定メッシュを重ねる（.collision.glb）</summary>
+        <input id="debug-collision-file" type="file" accept=".glb" />
+        <div id="debug-collision-options">
+          <label>
+            軸の補正
+            <select id="debug-collision-axis">
+              <option value="">なし</option>
+              <option value="x">X 軸 180°</option>
+              <option value="y">Y 軸 180°</option>
+              <option value="z">Z 軸 180°</option>
+            </select>
+          </label>
+          <label class="debug-check"><input id="debug-collision-wire" type="checkbox" /> ワイヤーフレーム</label>
+          <label class="debug-check"><input id="debug-collision-visible" type="checkbox" checked /> 表示</label>
+        </div>
+        <span id="debug-collision-info"></span>
+      </details>
     </div>
 
     <script type="module" src="./main.ts"></script>

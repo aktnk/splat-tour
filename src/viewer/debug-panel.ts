@@ -1,8 +1,10 @@
 // Authoring aid shown with ?debug=1 until the editor can export manifests:
 // shows the current view and the scene-local point under a click as JSON
 // ready to paste into the manifest, levels a tilted scene from three clicks
-// on the floor, and saves the current view as an image for an entrance's
-// thumbnail.
+// on the floor, saves the current view as an image for an entrance's
+// thumbnail, and overlays a collision mesh (collision-overlay.ts).
+
+import type { AxisCorrection, CollisionOverlayInfo } from "./collision-overlay";
 
 export interface DebugSnapshot {
   sceneId: string;
@@ -24,7 +26,12 @@ export interface DebugPanel {
 
 export function setupDebugPanel(
   enabled: boolean,
-  handlers: { onAlignStart(): void; onCapture(): void },
+  handlers: {
+    onAlignStart(): void;
+    onCapture(): void;
+    onCollisionFile(file: File): Promise<CollisionOverlayInfo>;
+    onCollisionOptions(options: { axis: AxisCorrection; wireframe: boolean; visible: boolean }): void;
+  },
 ): DebugPanel {
   const panel = document.getElementById("debug-panel") as HTMLElement;
   const statsEl = document.getElementById("debug-stats") as HTMLElement;
@@ -44,6 +51,36 @@ export function setupDebugPanel(
   (document.getElementById("debug-capture-btn") as HTMLButtonElement).addEventListener("click", () =>
     handlers.onCapture(),
   );
+
+  const collisionFile = document.getElementById("debug-collision-file") as HTMLInputElement;
+  const collisionAxis = document.getElementById("debug-collision-axis") as HTMLSelectElement;
+  const collisionWire = document.getElementById("debug-collision-wire") as HTMLInputElement;
+  const collisionVisible = document.getElementById("debug-collision-visible") as HTMLInputElement;
+  const collisionInfo = document.getElementById("debug-collision-info") as HTMLElement;
+  const collisionOptions = () =>
+    handlers.onCollisionOptions({
+      axis: collisionAxis.value as AxisCorrection,
+      wireframe: collisionWire.checked,
+      visible: collisionVisible.checked,
+    });
+  for (const el of [collisionAxis, collisionWire, collisionVisible]) {
+    el.addEventListener("change", collisionOptions);
+  }
+  collisionFile.addEventListener("change", async () => {
+    const file = collisionFile.files?.[0];
+    if (!file) return;
+    collisionInfo.textContent = "読み込み中…";
+    try {
+      const info = await handlers.onCollisionFile(file);
+      collisionOptions();
+      const size = info.size.map((n) => n.toFixed(2)).join(" × ");
+      collisionInfo.textContent = `${info.triangles.toLocaleString()} 三角形 | ${(info.bytes / 1e6).toFixed(1)} MB | 大きさ ${size}`;
+    } catch (err) {
+      collisionInfo.textContent = `読み込めませんでした: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    // The same file can be chosen again after it was rewritten.
+    collisionFile.value = "";
+  });
 
   return {
     enabled,
