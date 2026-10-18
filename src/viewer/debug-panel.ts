@@ -33,6 +33,7 @@ export interface WalkPanelSettings {
   eyeHeight: number;
   radius: number;
   stepHeight: number;
+  ignoreSpecks: boolean;
 }
 
 export function setupDebugPanel(
@@ -102,6 +103,7 @@ export function setupDebugPanel(
   const walkEye = document.getElementById("debug-walk-eye") as HTMLInputElement;
   const walkRadius = document.getElementById("debug-walk-radius") as HTMLInputElement;
   const walkStep = document.getElementById("debug-walk-step") as HTMLInputElement;
+  const walkSpecks = document.getElementById("debug-walk-specks") as HTMLInputElement;
   const walkInfo = document.getElementById("debug-walk-info") as HTMLElement;
   const number = (el: HTMLInputElement, fallback: number) => {
     const value = Number.parseFloat(el.value);
@@ -114,8 +116,9 @@ export function setupDebugPanel(
       eyeHeight: number(walkEye, 1.6),
       radius: number(walkRadius, 0.25),
       stepHeight: number(walkStep, 0.35),
+      ignoreSpecks: walkSpecks.checked,
     });
-  for (const el of [walkOn, walkVoxels, walkEye, walkRadius, walkStep]) {
+  for (const el of [walkOn, walkVoxels, walkEye, walkRadius, walkStep, walkSpecks]) {
     el.addEventListener("change", walkSettings);
   }
   walkFiles.addEventListener("change", async () => {
