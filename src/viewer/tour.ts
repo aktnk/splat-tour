@@ -116,7 +116,16 @@ export async function startTour({
   // Only used with ?debug=1; cleared when another scene loads.
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.
-  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.25, stepHeight: 0.35 });
+  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.25, stepHeight: 0.35, ignoreSpecks: true });
+  // Where walking last stopped, shown with ?debug=1 "歩いてみる".
+  const blockMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff3b3b, depthTest: false, transparent: true, opacity: 0.8 }),
+  );
+  blockMarker.renderOrder = 1001;
+  blockMarker.visible = false;
+  scene.add(blockMarker);
+  let shownBlock: ReturnType<typeof walker.blocked> = null;
   const voxelOverlay = setupVoxelOverlay(splatView.root, () => loop.invalidate());
   let showVoxels = false;
   // Scene-local point the shown voxels are around, refreshed as the camera moves.
@@ -279,6 +288,7 @@ export async function startTour({
       markers.setEntrances([], 1);
       collisionOverlay.clear();
       walker.setGrid(null, null);
+      showBlock(null);
       voxelOverlay.show(null, new THREE.Vector3());
       status.setTitles(manifest.title, current.title);
       sidebar.setCurrent(current.id);
@@ -464,6 +474,7 @@ export async function startTour({
       controls.update(camera);
       splatView.clampCamera(current.bounds);
       settling = walker.constrain(camera, previous, dt);
+      if (walker.isEnabled() && walker.blocked() !== shownBlock) showBlock(walker.blocked());
     }
     if (showVoxels) updateVoxelOverlay();
 
@@ -486,6 +497,21 @@ export async function startTour({
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
     return moved || settling || busy || loading || splatView.isStreaming();
+  }
+
+  // ?debug=1: what stopped the last walking move (a red dot), to tell a real
+  // obstacle from a floater or a hole in the scan.
+  function showBlock(block: ReturnType<typeof walker.blocked>): void {
+    shownBlock = block;
+    blockMarker.visible = block !== null;
+    if (!block) return;
+    blockMarker.position.copy(block.point);
+    blockMarker.scale.setScalar((walker.grid()?.resolution ?? 0.1) * splatView.root.scale.x * 0.8);
+    debug.showWalkInfo(
+      block.reason === "body"
+        ? `止まった理由: 体に当たるボクセル（足元から ${block.height.toFixed(2)} の高さ、赤い点）`
+        : "止まった理由: 進む先に、段差の高さ以内の床がない（床の穴・段差が高い・下り坂が急、赤い点）",
+    );
   }
 
   // Redraws the voxels near the camera once it has moved a few voxels away.
