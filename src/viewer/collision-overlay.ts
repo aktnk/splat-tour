@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import type { VoxelGrid } from "./voxel-grid";
 
 // ?debug=1 aid for the walking mode: shows a collision mesh made by
 // splat-transform (`--collision-mesh`, .collision.glb) over the scene, in its
@@ -95,3 +96,42 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
     clear,
   };
 }
+
+export interface VoxelOverlay {
+  /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
+  show(grid: VoxelGrid | null, center: THREE.Vector3): void;
+}
+
+const VOXEL_RADIUS = 30; // in voxels around the camera
+const VOXEL_LIMIT = 60000;
+
+// ?debug=1: the solid voxels near the camera as small boxes, to compare the
+// voxel data the walking mode uses with the scene and the collision mesh.
+export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): VoxelOverlay {
+  const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.35, depthWrite: false });
+  let mesh: THREE.InstancedMesh | null = null;
+  const matrix = new THREE.Matrix4();
+
+  return {
+    show(grid, center) {
+      if (mesh) {
+        root.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.dispose();
+        mesh = null;
+      }
+      if (grid) {
+        const voxels = grid.solidVoxelsNear(center.x, center.y, center.z, VOXEL_RADIUS * grid.resolution, VOXEL_LIMIT);
+        const size = grid.resolution * 0.9;
+        mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size, size, size), material, Math.max(voxels.length, 1));
+        mesh.count = voxels.length;
+        voxels.forEach(([x, y, z], i) => mesh?.setMatrixAt(i, matrix.makeTranslation(x, y, z)));
+        mesh.renderOrder = 1000;
+        mesh.raycast = () => {};
+        root.add(mesh);
+      }
+      onChange();
+    },
+  };
+}
+

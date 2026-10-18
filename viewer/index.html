@@ -90,6 +90,18 @@
         </div>
         <span id="debug-collision-info"></span>
       </details>
+      <details id="debug-walk">
+        <summary>歩いてみる（.voxel.json と .voxel.bin）</summary>
+        <input id="debug-walk-files" type="file" accept=".json,.bin" multiple />
+        <div id="debug-walk-options">
+          <label class="debug-check"><input id="debug-walk-on" type="checkbox" /> 歩く</label>
+          <label class="debug-check"><input id="debug-walk-voxels" type="checkbox" /> 近くのボクセルを表示</label>
+          <label>目の高さ <input id="debug-walk-eye" type="number" step="0.1" min="0.1" value="1.6" /></label>
+          <label>体の半径 <input id="debug-walk-radius" type="number" step="0.05" min="0" value="0.25" /></label>
+          <label>段差 <input id="debug-walk-step" type="number" step="0.05" min="0" value="0.35" /></label>
+        </div>
+        <span id="debug-walk-info"></span>
+      </details>
     </div>
 
     <script type="module" src="./main.ts"></script>
