@@ -73,6 +73,8 @@ const HEAD_CLEARANCE_VOXELS = 1;
 const SLIDE_ANGLES = [10, 20, 30, 40, 50, 60, 70, 80, 90].map((deg) => (deg * Math.PI) / 180);
 /** How far a slide may back off from what it hit, in voxels. */
 const BACKOFFS = [0, 0.15, 0.3];
+/** Places tried per frame at most (a step, its slides), so a tight spot costs a few ms. */
+const MAX_CHECKS_PER_FRAME = 150;
 /** Half the square (in voxels) a surface's direction is read from. */
 const NORMAL_REACH = 2;
 
@@ -89,6 +91,9 @@ export function setupWalker(initial: WalkOptions): Walker {
   const placed = new THREE.Vector3();
   // Which way the last slide turned (1 or -1).
   let slideSide = 1;
+  // Places tried this frame, and how deep the body is stuck where it stands (null: not stuck).
+  let checks = 0;
+  let stuckDepth: number | null = null;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -266,6 +271,8 @@ export function setupWalker(initial: WalkOptions): Walker {
 
   /** Where to stand at (x, z) coming from `ground` (ground and eye height above it), or null if it cannot be walked to. */
   function standAt(x: number, z: number, ground: number): Stand | null {
+    // A cap on the work per frame: a tight spot must not freeze the page.
+    if (++checks > MAX_CHECKS_PER_FRAME) return null;
     const { stepHeight } = options;
     // Up a step at most, down as far as a step plus some slack for slopes.
     const next = groundUnder(x, z, ground + stepHeight + worldStep(), ground - stepHeight - worldStep());
@@ -274,7 +281,28 @@ export function setupWalker(initial: WalkOptions): Walker {
       return null;
     }
     const head = bodyFits(x, z, next);
-    return head === null ? null : { ground: next, head };
+    if (head !== null) return { ground: next, head };
+    // Already stuck in something (placed against a wall by a glide or a
+    // landing): any step that does not sink deeper is allowed, so the
+    // walker can get out.
+    if (stuckDepth !== null && overlap(x, z, next) <= stuckDepth) {
+      return { ground: next, head: options.eyeHeight * MIN_CROUCH };
+    }
+    return null;
+  }
+
+  /** How many points of the body (crouched as low as allowed) are in something. */
+  function overlap(x: number, z: number, ground: number): number {
+    const { radius, stepHeight, eyeHeight } = options;
+    const step = worldStep();
+    let count = 0;
+    for (let h = ground + stepHeight + step / 2; h <= ground + eyeHeight * MIN_CROUCH; h += step) {
+      for (let i = -1; i < DIRECTIONS; i++) {
+        const a = (i / DIRECTIONS) * Math.PI * 2;
+        if (obstacle(i < 0 ? x : x + Math.cos(a) * radius, h, i < 0 ? z : z + Math.sin(a) * radius)) count++;
+      }
+    }
+    return count;
   }
 
   const walker: Walker = {
@@ -308,6 +336,9 @@ export function setupWalker(initial: WalkOptions): Walker {
         // Nothing below (e.g. started in the air over a hole): leave the camera free.
         return false;
       }
+      checks = 0;
+      // Stuck in something where the camera stands now? Then steps out are allowed.
+      stuckDepth = bodyFits(previous.x, previous.z, ground) === null ? overlap(previous.x, previous.z, ground) : null;
       const target = camera.position;
       // The controls move along the view, so looking down shortens the
       // horizontal part; walking keeps the whole length on the ground.
