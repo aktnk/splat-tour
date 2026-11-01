@@ -40,6 +40,7 @@ manifest は手で書けます（GUI の制作ツールは別のプロジェク�
    - PC: http://localhost:5190
    - スマホ: 同じ Wi-Fi で `http://<PCのIP>:5190`（ターミナルに表示される Network の URL）
    - 別のツアーを開くとき: `TOUR_DIR=tours/<名前> npm run viewer:dev`
+     - Windows の PowerShell では `$env:TOUR_DIR="tours/<名前>"; npm run dev`。リポジトリの外のフォルダも、相対パスかフルパス（例: `H:\tours\<名前>`）で指定できます。
    - 特定のシーンから開くとき: `?scene=<シーンのid>`（例: `?debug=1&scene=main-hall`）
 
 ## シーンを追加する（例: 建物周辺 → 展示場メイン）
