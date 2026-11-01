@@ -3,7 +3,8 @@ import type { VoxelGrid } from "./voxel-grid";
 
 // Walking on a voxel grid (voxel-grid.ts): the camera stays eyeHeight above
 // the ground under it, steps up and down by at most stepHeight (stairs),
-// stops at walls and slides along them, and never walks off where there is
+// stops at walls and slides along them (at any angle, and around corners),
+// and never walks off where there is
 // no ground (a hole in a scan is a no-go spot, not a pit; holes narrower
 // than the body are stepped over). The body is a column of `radius` from just
 // above the step height to the eyes; under a low ceiling the eyes come down
@@ -68,6 +69,12 @@ const SPECK_SIZE = 0.3;
 const MIN_CROUCH = 0.6;
 /** Space kept between the eyes and a ceiling, in voxels. */
 const HEAD_CLEARANCE_VOXELS = 1;
+/** Turns tried when a step is blocked, smallest first (radians). */
+const SLIDE_ANGLES = [10, 20, 30, 40, 50, 60, 70, 80, 90].map((deg) => (deg * Math.PI) / 180);
+/** How far a slide may back off from what it hit, in voxels. */
+const BACKOFFS = [0, 0.15, 0.3];
+/** Half the square (in voxels) a surface's direction is read from. */
+const NORMAL_REACH = 2;
 
 export function setupWalker(initial: WalkOptions): Walker {
   let grid: VoxelGrid | null = null;
@@ -80,6 +87,8 @@ export function setupWalker(initial: WalkOptions): Walker {
   let feet: number | null = null;
   // Where the walker left the camera; if it is elsewhere now, it was moved otherwise.
   const placed = new THREE.Vector3();
+  // Which way the last slide turned (1 or -1).
+  let slideSide = 1;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -155,6 +164,106 @@ export function setupWalker(initial: WalkOptions): Walker {
     return best;
   }
 
+  /**
+   * Horizontal direction out of the solid around a world point: away from
+   * the solid voxels in a small square around it at its height (a slanted
+   * wall's normal, roughly; a corner's bisector).
+   */
+  function surfaceNormal(point: THREE.Vector3): [number, number] {
+    const step = worldStep();
+    let nx = 0;
+    let nz = 0;
+    for (let i = -NORMAL_REACH; i <= NORMAL_REACH; i++) {
+      for (let k = -NORMAL_REACH; k <= NORMAL_REACH; k++) {
+        if ((i !== 0 || k !== 0) && obstacle(point.x + i * step, point.y, point.z + k * step)) {
+          nx -= i;
+          nz -= k;
+        }
+      }
+    }
+    return [nx, nz];
+  }
+
+  /**
+   * A blocked step (sx, sz) from (x, z), redirected. First along what was
+   * hit: the part of the step across the surface (its direction read from
+   * the voxels around the hit point) is dropped and the body backs off a
+   * little, since a slanted wall is a staircase of voxels that a parallel
+   * step would still catch. Then the step turned by the smallest of
+   * SLIDE_ANGLES that works, away from the hit point first (else the side
+   * that worked last time), so the walker rounds a corner instead of
+   * wobbling at it. Null if nothing works.
+   */
+  function slide(
+    x: number,
+    z: number,
+    sx: number,
+    sz: number,
+    ground: number,
+    hit: WalkBlock | null,
+  ): [number, number, Stand] | null {
+    // Turn away from what was hit (it is on one side of the step), else
+    // the way the last slide went.
+    let preferred = slideSide;
+    if (hit) {
+      const cross = sx * (hit.point.z - z) - sz * (hit.point.x - x);
+      if (Math.abs(cross) > 1e-9) preferred = cross < 0 ? 1 : -1;
+    }
+    if (hit?.reason === "body") {
+      let [nx, nz] = surfaceNormal(hit.point);
+      const n = Math.hypot(nx, nz);
+      if (n > 1e-9) {
+        nx /= n;
+        nz /= n;
+        const into = sx * nx + sz * nz;
+        const tx = sx - into * nx;
+        const tz = sz - into * nz;
+        // Straight into the surface there is nothing to slide along; and a
+        // slide towards what was hit (a misread tip) would only wobble.
+        const turn = sx * tz - sz * tx;
+        if (into < 0 && Math.hypot(tx, tz) > Math.hypot(sx, sz) * 0.05 && turn * preferred > 0) {
+          for (const backoff of BACKOFFS) {
+            const px = x + tx + nx * backoff * worldStep();
+            const pz = z + tz + nz * backoff * worldStep();
+            const stand = standAt(px, pz, ground);
+            if (stand !== null) return [px, pz, stand];
+          }
+        }
+      }
+    }
+    // Backing off from the hit point too, as along a surface above.
+    let ax = 0;
+    let az = 0;
+    if (hit) {
+      ax = x - hit.point.x;
+      az = z - hit.point.z;
+      const a = Math.hypot(ax, az) || 1;
+      ax /= a;
+      az /= a;
+    }
+    const stepLength = Math.hypot(sx, sz);
+    for (const angle of SLIDE_ANGLES) {
+      // At least a little progress even when turned all the way.
+      const length = Math.max(Math.cos(angle), 0.2);
+      for (const side of [preferred, -preferred]) {
+        const c = Math.cos(angle * side);
+        const s = Math.sin(angle * side);
+        for (const backoff of BACKOFFS) {
+          const away = backoff * worldStep();
+          if (away > stepLength * 2) break;
+          const nx = x + (sx * c - sz * s) * length + ax * away;
+          const nz = z + (sx * s + sz * c) * length + az * away;
+          const stand = standAt(nx, nz, ground);
+          if (stand !== null) {
+            slideSide = side;
+            return [nx, nz, stand];
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   /** Where to stand at (x, z) coming from `ground` (ground and eye height above it), or null if it cannot be walked to. */
   function standAt(x: number, z: number, ground: number): Stand | null {
     const { stepHeight } = options;
@@ -226,15 +335,12 @@ export function setupWalker(initial: WalkOptions): Walker {
           continue;
         }
         hit ??= lastFailure;
-        // Slide along the wall: keep one of the two horizontal components.
-        const alongX = standAt(nx, z, next.ground);
-        if (alongX !== null) {
-          [x, next] = [nx, alongX];
-          continue;
-        }
-        const alongZ = standAt(x, nz, next.ground);
-        if (alongZ === null) break;
-        [z, next] = [nz, alongZ];
+        // Slide along whatever was hit, at any angle: the step turned away
+        // from it as little as works (shortened by the cosine, as sliding
+        // along a wall does), around a corner too.
+        const slid = slide(x, z, dx / steps, dz / steps, next.ground, lastFailure);
+        if (slid === null) break;
+        [x, z, next] = slid;
       }
       target.x = x;
       target.z = z;
