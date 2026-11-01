@@ -6,6 +6,7 @@ import {
   isExternalPage,
   parseManifest,
   resolveAssetUrl,
+  voxelBinPath,
   type Entrance,
   type Manifest,
   type Scene,
@@ -26,6 +27,7 @@ import { setupCollisionOverlay, setupVoxelOverlay } from "./collision-overlay";
 import { setupDebugPanel } from "./debug-panel";
 import { parseVoxelGrid } from "./voxel-grid";
 import { setupWalker } from "./walk";
+import { setupMoveModeSwitch } from "./move-mode";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
@@ -101,12 +103,14 @@ export async function startTour({
     onVoxelFiles: async (json, bin) => {
       const grid = parseVoxelGrid(JSON.parse(await json.text()), await bin.arrayBuffer());
       walker.setGrid(grid, splatView.root);
+      moveMode.setAvailable(true);
       const mb = ((json.size + bin.size) / 1e6).toFixed(1);
       return `ボクセル ${grid.resolution} | ${mb} MB | 「歩く」で床の上を歩きます`;
     },
     onWalkSettings: (settings) => {
       walker.setOptions(settings);
       walker.setEnabled(settings.walking);
+      moveMode.setMode(walker.isEnabled() ? "walk" : "fly");
       showVoxels = settings.showVoxels;
       voxelCenter = null;
       if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
@@ -116,7 +120,12 @@ export async function startTour({
   // Only used with ?debug=1; cleared when another scene loads.
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.
-  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.25, stepHeight: 0.35, ignoreSpecks: true });
+  // Walking: the scene's walk settings, or voxels tried with ?debug=1 "歩いてみる".
+  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.2, stepHeight: 0.35, ignoreSpecks: true });
+  const moveMode = setupMoveModeSwitch((mode) => {
+    walker.setEnabled(mode === "walk");
+    loop.invalidate();
+  });
   // Where walking last stopped, shown with ?debug=1 "歩いてみる".
   const blockMarker = new THREE.Mesh(
     new THREE.SphereGeometry(1, 12, 8),
@@ -288,6 +297,7 @@ export async function startTour({
       markers.setEntrances([], 1);
       collisionOverlay.clear();
       walker.setGrid(null, null);
+      moveMode.setAvailable(false);
       showBlock(null);
       voxelOverlay.show(null, new THREE.Vector3());
       status.setTitles(manifest.title, current.title);
@@ -309,11 +319,40 @@ export async function startTour({
         current.entrances.filter((e) => e.target.type !== "view"),
         current.transform.scale,
       );
+      if (current.walk) void loadWalk(current);
     } catch (err) {
       status.showError(`「${current.title}」を読み込めません: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       busy = false;
       loop.invalidate();
+    }
+  }
+
+  // The scene's collision voxels, loaded after its splat; until then (or if
+  // they cannot be read) the scene is flown as without walk settings.
+  async function loadWalk(s: Scene): Promise<void> {
+    const settings = s.walk;
+    if (!settings) return;
+    try {
+      const [meta, bin] = await Promise.all([
+        fetch(assetUrl(settings.voxels)).then((r) => {
+          if (!r.ok) throw new Error(`${settings.voxels}: ${r.status}`);
+          return r.json();
+        }),
+        fetch(assetUrl(voxelBinPath(settings.voxels))).then((r) => {
+          if (!r.ok) throw new Error(`${voxelBinPath(settings.voxels)}: ${r.status}`);
+          return r.arrayBuffer();
+        }),
+      ]);
+      if (current !== s) return;
+      walker.setGrid(parseVoxelGrid(meta, bin), splatView.root);
+      walker.setOptions({ ...settings, ignoreSpecks: true });
+      walker.setEnabled(settings.start === "walk");
+      moveMode.setMode(settings.start);
+      moveMode.setAvailable(true);
+      loop.invalidate();
+    } catch (err) {
+      console.warn(`「${s.title}」の歩行用データを読めませんでした（飛んで移動します）:`, err);
     }
   }
 

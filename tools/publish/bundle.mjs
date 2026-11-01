@@ -46,6 +46,11 @@ function referencedAssets(manifest) {
   const paths = new Set();
   for (const scene of manifest.scenes ?? []) {
     if (scene.splat?.url) paths.add(scene.splat.url);
+    // Walking: the .voxel.json and the .voxel.bin next to it.
+    if (scene.walk?.voxels) {
+      paths.add(scene.walk.voxels);
+      paths.add(scene.walk.voxels.replace(/\.voxel\.json$/, ".voxel.bin"));
+    }
     for (const entrance of scene.entrances ?? []) {
       // thumbnail / autoThumbnail, or their former names image / preview.
       for (const key of ["thumbnail", "autoThumbnail", "image", "preview"]) {

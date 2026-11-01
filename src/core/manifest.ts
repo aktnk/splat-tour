@@ -83,6 +83,22 @@ export interface Bounds {
   max: Vec3;
 }
 
+/**
+ * Walking in a scene (walk.ts): the collision voxels splat-transform writes
+ * (`--voxel-size 0.1 ... <name>.voxel.json`; its `<name>.voxel.bin` is read
+ * from next to it) and the walker's size, in world units (metres when the
+ * capture is to scale).
+ */
+export interface WalkSettings {
+  /** The .voxel.json, relative to assetBaseUrl. */
+  voxels: string;
+  eyeHeight: number;
+  radius: number;
+  stepHeight: number;
+  /** How the scene is entered: walking, or flying as without walk settings. */
+  start: "walk" | "fly";
+}
+
 export interface Scene {
   id: string;
   title: string;
@@ -92,6 +108,7 @@ export interface Scene {
   camera: CameraSettings;
   initialView: View;
   bounds?: Bounds;
+  walk?: WalkSettings;
   entrances: Entrance[];
 }
 
@@ -205,6 +222,30 @@ function bounds(value: unknown, path: string): Bounds {
   };
 }
 
+function walk(value: unknown, path: string): WalkSettings {
+  const w = obj(value, path);
+  const voxels = imageUrl(w.voxels, `${path}.voxels`);
+  if (!voxels.endsWith(".voxel.json")) {
+    fail(`${path}.voxels`, "splat-transform が出力した .voxel.json を指定してください");
+  }
+  const start = w.start ?? "walk";
+  if (start !== "walk" && start !== "fly") {
+    fail(`${path}.start`, `"walk" / "fly" のいずれかである必要があります`);
+  }
+  return {
+    voxels,
+    eyeHeight: num(w.eyeHeight, `${path}.eyeHeight`, 1.6),
+    radius: num(w.radius, `${path}.radius`, 0.2),
+    stepHeight: num(w.stepHeight, `${path}.stepHeight`, 0.35),
+    start,
+  };
+}
+
+/** The .voxel.bin that goes with a .voxel.json. */
+export function voxelBinPath(voxels: string): string {
+  return voxels.replace(/\.voxel\.json$/, ".voxel.bin");
+}
+
 function target(value: unknown, path: string): EntranceTarget {
   const t = obj(value, path);
   switch (t.type) {
@@ -286,6 +327,7 @@ function scene(value: unknown, path: string): Scene {
         ? { position: [0, 0, 0], yaw: 0, pitch: 0 }
         : view(s.initialView, `${path}.initialView`),
     bounds: s.bounds === undefined ? undefined : bounds(s.bounds, `${path}.bounds`),
+    walk: s.walk === undefined ? undefined : walk(s.walk, `${path}.walk`),
     entrances: entrances.map((e, i) => entrance(e, `${path}.entrances[${i}]`)),
   };
 }

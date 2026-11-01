@@ -177,9 +177,17 @@ export function setupWalker(initial: WalkOptions): Walker {
         return false;
       }
       const target = camera.position;
+      // The controls move along the view, so looking down shortens the
+      // horizontal part; walking keeps the whole length on the ground.
+      let dx = target.x - previous.x;
+      let dz = target.z - previous.z;
+      const horizontal = Math.hypot(dx, dz);
+      if (horizontal > 1e-9) {
+        const scale = target.distanceTo(previous) / horizontal;
+        dx *= scale;
+        dz *= scale;
+      }
       // In short steps, so a slow frame's long move still stops at a wall.
-      const dx = target.x - previous.x;
-      const dz = target.z - previous.z;
       const steps = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(Math.hypot(dx, dz) / (worldStep() / 2))));
       let x = previous.x;
       let z = previous.z;
