@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Web viewer (viewer/). In dev the tour folder (manifest.json + assets/) is
@@ -12,7 +13,8 @@ export default defineConfig(({ command }) => ({
   root: fileURLToPath(new URL("./viewer", import.meta.url)),
   // Relative asset paths so the build works from any folder.
   base: "./",
-  publicDir: command === "serve" ? fileURLToPath(new URL(tourDir, new URL("./", import.meta.url))) : false,
+  // Resolved as a path: a Windows path such as H:\tours\x would read as a URL of scheme "h:".
+  publicDir: command === "serve" ? resolve(fileURLToPath(new URL("./", import.meta.url)), tourDir) : false,
   clearScreen: false,
   // Missing files get a 404 instead of the index.html SPA fallback, which
   // loaders would otherwise try to decode as the asset.
