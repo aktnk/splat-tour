@@ -114,7 +114,7 @@ export function setupDebugPanel(
       walking: walkOn.checked,
       showVoxels: walkVoxels.checked,
       eyeHeight: number(walkEye, 1.6),
-      radius: number(walkRadius, 0.25),
+      radius: number(walkRadius, 0.2),
       stepHeight: number(walkStep, 0.35),
       ignoreSpecks: walkSpecks.checked,
     });

@@ -30,6 +30,10 @@
     </div>
     <div id="error" role="alert" hidden></div>
     <button id="reset-view-btn" type="button" title="このシーンの最初の位置に戻る">⟲ 初期位置</button>
+    <div id="move-mode" role="group" aria-label="移動のしかた" hidden>
+      <button type="button" data-mode="walk" aria-pressed="false" title="床の上を歩く（壁は通り抜けない）">歩く</button>
+      <button type="button" data-mode="fly" aria-pressed="false" title="自由に飛んで移動する">飛ぶ</button>
+    </div>
 
     <div id="tooltip" hidden>
       <h2 id="tooltip-title"></h2>
@@ -97,7 +101,7 @@
           <label class="debug-check"><input id="debug-walk-on" type="checkbox" /> 歩く</label>
           <label class="debug-check"><input id="debug-walk-voxels" type="checkbox" /> 近くのボクセルを表示</label>
           <label>目の高さ <input id="debug-walk-eye" type="number" step="0.1" min="0.1" value="1.6" /></label>
-          <label>体の半径 <input id="debug-walk-radius" type="number" step="0.05" min="0" value="0.25" /></label>
+          <label>体の半径 <input id="debug-walk-radius" type="number" step="0.05" min="0" value="0.2" /></label>
           <label>段差 <input id="debug-walk-step" type="number" step="0.05" min="0" value="0.35" /></label>
           <label class="debug-check" title="周りに固体のない小さなかけら（浮遊ノイズなど）では止まらない"><input id="debug-walk-specks" type="checkbox" checked /> 小さなかけらは無視</label>
         </div>

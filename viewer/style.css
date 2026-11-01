@@ -359,6 +359,31 @@ button {
   z-index: 6;
 }
 
+/* "歩く / 飛ぶ", above "初期位置" (scenes with walk settings only). */
+#move-mode {
+  position: fixed;
+  right: 16px;
+  bottom: calc(68px + env(safe-area-inset-bottom));
+  display: flex;
+  border: 1px solid #4a4e5a;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  z-index: 6;
+}
+
+#move-mode button {
+  padding: 8px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+#move-mode button[aria-pressed="true"] {
+  background: var(--accent);
+}
+
 #joystick-zone {
   position: fixed;
   bottom: 32px;
