@@ -6,7 +6,8 @@ import type { VoxelGrid } from "./voxel-grid";
 // stops at walls and slides along them, and never walks off where there is
 // no ground (a hole in a scan is a no-go spot, not a pit; holes narrower
 // than the body are stepped over). The body is a column of `radius` from just
-// above the step height to the eyes. Specks (lumps smaller than about
+// above the step height to the eyes; under a low ceiling the eyes come down
+// (crouching, to MIN_CROUCH of eyeHeight) instead of the walk stopping. Specks (lumps smaller than about
 // SPECK_SIZE across, e.g. floaters) can be ignored for the body.
 //
 // Distances are in world units; the grid answers in scene-local units, so
@@ -29,6 +30,12 @@ export interface WalkBlock {
   point: THREE.Vector3;
   /** Height of `point` above the feet. */
   height: number;
+}
+
+interface Stand {
+  ground: number;
+  /** Eye height above the ground (lower than eyeHeight when crouching). */
+  head: number;
 }
 
 export interface Walker {
@@ -57,6 +64,10 @@ const DIRECTIONS = 8;
 const MAX_SUBSTEPS = 40;
 /** Lumps up to about this size across (world units) count as specks. */
 const SPECK_SIZE = 0.3;
+/** Lowest crouch, as a share of eyeHeight; lower gaps are not walked into. */
+const MIN_CROUCH = 0.6;
+/** Space kept between the eyes and a ceiling, in voxels. */
+const HEAD_CLEARANCE_VOXELS = 1;
 
 export function setupWalker(initial: WalkOptions): Walker {
   let grid: VoxelGrid | null = null;
@@ -67,6 +78,8 @@ export function setupWalker(initial: WalkOptions): Walker {
   let lastFailure: WalkBlock | null = null;
   // The ground last stood on (world y), kept while the camera only walks.
   let feet: number | null = null;
+  // Where the walker left the camera; if it is elsewhere now, it was moved otherwise.
+  const placed = new THREE.Vector3();
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -102,22 +115,32 @@ export function setupWalker(initial: WalkOptions): Walker {
     return null;
   }
 
-  /** Whether the body fits standing on `ground` at (x, z). */
-  function bodyFree(x: number, z: number, ground: number): boolean {
+  /**
+   * The eye height above `ground` the body fits at (x, z): eyeHeight, or
+   * lower under a ceiling; null if it does not fit even crouching.
+   */
+  function bodyFits(x: number, z: number, ground: number): number | null {
     const { eyeHeight, radius, stepHeight } = options;
     const step = worldStep();
-    for (let h = ground + stepHeight + step / 2; h <= ground + eyeHeight; h += step) {
-      for (let i = -1; i < DIRECTIONS; i++) {
-        const a = (i / DIRECTIONS) * Math.PI * 2;
-        const px = i < 0 ? x : x + Math.cos(a) * radius;
-        const pz = i < 0 ? z : z + Math.sin(a) * radius;
-        if (obstacle(px, h, pz)) {
+    const clearance = step * HEAD_CLEARANCE_VOXELS;
+    // Up each column of the body (middle and rim) to the first thing in it:
+    // the lowest one sets how high the eyes can be.
+    let head = eyeHeight;
+    for (let i = -1; i < DIRECTIONS; i++) {
+      const a = (i / DIRECTIONS) * Math.PI * 2;
+      const px = i < 0 ? x : x + Math.cos(a) * radius;
+      const pz = i < 0 ? z : z + Math.sin(a) * radius;
+      for (let h = ground + stepHeight + step / 2; h <= ground + head + clearance; h += step) {
+        if (!obstacle(px, h, pz)) continue;
+        head = h - ground - clearance;
+        if (head < eyeHeight * MIN_CROUCH) {
           lastFailure = { reason: "body", point: new THREE.Vector3(px, h, pz), height: h - ground };
-          return false;
+          return null;
         }
+        break;
       }
     }
-    return true;
+    return Math.min(head, eyeHeight);
   }
 
   /** Ground at (x, z) in a height window; under the body's rim too, so narrow holes are crossed. */
@@ -132,8 +155,8 @@ export function setupWalker(initial: WalkOptions): Walker {
     return best;
   }
 
-  /** The ground to stand on at (x, z) coming from `ground`, or null if it cannot be walked to. */
-  function standAt(x: number, z: number, ground: number): number | null {
+  /** Where to stand at (x, z) coming from `ground` (ground and eye height above it), or null if it cannot be walked to. */
+  function standAt(x: number, z: number, ground: number): Stand | null {
     const { stepHeight } = options;
     // Up a step at most, down as far as a step plus some slack for slopes.
     const next = groundUnder(x, z, ground + stepHeight + worldStep(), ground - stepHeight - worldStep());
@@ -141,7 +164,8 @@ export function setupWalker(initial: WalkOptions): Walker {
       lastFailure = { reason: "ground", point: new THREE.Vector3(x, ground, z), height: 0 };
       return null;
     }
-    return bodyFree(x, z, next) ? next : null;
+    const head = bodyFits(x, z, next);
+    return head === null ? null : { ground: next, head };
   }
 
   const walker: Walker = {
@@ -167,10 +191,9 @@ export function setupWalker(initial: WalkOptions): Walker {
     },
     constrain(camera, previous, dt) {
       if (!enabled || !grid || !root) return false;
-      const { eyeHeight } = options;
       // Where the feet are: the ground last stood on, unless the camera was
       // moved some other way (a glide, a jump to a view); then the first ground below the eye.
-      const kept = feet !== null && Math.abs(previous.y - (feet + eyeHeight)) <= options.stepHeight * 2;
+      const kept = feet !== null && previous.distanceToSquared(placed) < 1e-8;
       const ground = kept ? feet : walker.groundAt(previous);
       if (ground === null) {
         // Nothing below (e.g. started in the air over a hole): leave the camera free.
@@ -191,40 +214,40 @@ export function setupWalker(initial: WalkOptions): Walker {
       const steps = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(Math.hypot(dx, dz) / (worldStep() / 2))));
       let x = previous.x;
       let z = previous.z;
-      let next = ground;
+      // Where the camera stands now (crouching if the ceiling is low).
+      let next: Stand = { ground, head: bodyFits(previous.x, previous.z, ground) ?? options.eyeHeight * MIN_CROUCH };
       let hit: WalkBlock | null = null;
       for (let i = 0; i < steps; i++) {
         const nx = x + dx / steps;
         const nz = z + dz / steps;
-        const ahead = standAt(nx, nz, next);
+        const ahead = standAt(nx, nz, next.ground);
         if (ahead !== null) {
           [x, z, next] = [nx, nz, ahead];
           continue;
         }
         hit ??= lastFailure;
         // Slide along the wall: keep one of the two horizontal components.
-        const alongX = standAt(nx, z, next);
+        const alongX = standAt(nx, z, next.ground);
         if (alongX !== null) {
           [x, next] = [nx, alongX];
           continue;
         }
-        const alongZ = standAt(x, nz, next);
+        const alongZ = standAt(x, nz, next.ground);
         if (alongZ === null) break;
         [z, next] = [nz, alongZ];
       }
       target.x = x;
       target.z = z;
-      feet = next;
+      feet = next.ground;
       if (dx !== 0 || dz !== 0) block = hit;
-      const eye = next + eyeHeight;
+      const eye = next.ground + next.head;
       const ease = 1 - Math.exp(-EASE_RATE * Math.max(dt, 0));
       // Vertical input is ignored; the eye eases to its height over the ground.
       target.y = previous.y + (eye - previous.y) * ease;
-      if (Math.abs(eye - target.y) < 1e-3) {
-        target.y = eye;
-        return false;
-      }
-      return true;
+      const settled = Math.abs(eye - target.y) < 1e-3;
+      if (settled) target.y = eye;
+      placed.copy(target);
+      return !settled;
     },
   };
   return walker;
