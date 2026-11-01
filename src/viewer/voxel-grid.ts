@@ -25,6 +25,8 @@ const FACES = [
   [0, 0, -1],
 ];
 const SPECK_CACHE_LIMIT = 200_000;
+/** Above any voxel index on an axis (the root of a depth-12 tree has 16384 voxels across). */
+const KEY_SPAN = 1 << 15;
 
 export interface VoxelGrid {
   /** Voxel edge length in scene-local units. */
@@ -101,7 +103,9 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
     return bit < 32 ? ((leaves[leaf] >>> bit) & 1) === 1 : ((leaves[leaf + 1] >>> (bit - 32)) & 1) === 1;
   }
 
-  const speckCache = new Map<string, boolean>();
+  // Keyed by voxel index as one number (indices are below KEY_SPAN; outside the grid is never solid).
+  const speckCache = new Map<number, boolean>();
+  const key = (i: number, j: number, k: number) => i + KEY_SPAN * (j + KEY_SPAN * k);
   // Scene-local to voxel indices in PlayCanvas' frame (180° about Z).
   const ix = (x: number) => Math.floor((-x - minX) / res);
   const iy = (y: number) => Math.floor((-y - minY) / res);
@@ -113,32 +117,32 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
       return solidAt(ix(x), iy(y), iz(z));
     },
     isSpeck(x, y, z, maxVoxels) {
-      const start = [ix(x), iy(y), iz(z)];
-      const key = (i: number, j: number, k: number) => `${i},${j},${k}`;
-      const startKey = key(start[0], start[1], start[2]);
-      const cached = speckCache.get(startKey);
+      const start = key(ix(x), iy(y), iz(z));
+      const cached = speckCache.get(start);
       if (cached !== undefined) return cached;
       // Breadth-first over face neighbours until the lump is known to be large.
-      const seen = new Set([startKey]);
+      const seen = new Set([start]);
       const queue = [start];
       let small = true;
-      while (queue.length > 0) {
-        const [i, j, k] = queue.pop() as number[];
+      while (queue.length > 0 && small) {
+        const k0 = queue.pop() as number;
+        const i = k0 % KEY_SPAN;
+        const j = Math.floor(k0 / KEY_SPAN) % KEY_SPAN;
+        const k = Math.floor(k0 / (KEY_SPAN * KEY_SPAN));
         for (const [di, dj, dk] of FACES) {
           const n = key(i + di, j + dj, k + dk);
           if (seen.has(n) || !solidAt(i + di, j + dj, k + dk)) continue;
           seen.add(n);
           if (seen.size > maxVoxels) {
             small = false;
-            queue.length = 0;
             break;
           }
-          queue.push([i + di, j + dj, k + dk]);
+          queue.push(n);
         }
       }
       if (speckCache.size > SPECK_CACHE_LIMIT) speckCache.clear();
       // Every voxel of a small lump is a speck too; of a large one only the start is known.
-      for (const n of small ? seen : [startKey]) speckCache.set(n, small);
+      for (const n of small ? seen : [start]) speckCache.set(n, small);
       return small;
     },
     solidVoxelsNear(x, y, z, radius, limit) {
