@@ -33,6 +33,13 @@ const STICK_REACH = 0.42;
 // work side by side. Lifting the finger, the browser cancelling the touch
 // (a system gesture, a notification), losing the capture or the page
 // losing focus all let the stick go: it must never stay tilted.
+//
+// Phones do not always send the pointer events: a long press can turn into
+// text selection (seen on a phone), after which no pointerup or
+// pointercancel came and the stick stayed tilted. So the finger is followed
+// as a touch too: the zone's touchstart is cancelled (no selection, callout
+// or other long-press default), and whenever any touch ends anywhere, a
+// stick whose finger is no longer on the screen lets go.
 export function setupJoystick(zone: HTMLElement): Joystick {
   const base = document.createElement("div");
   base.className = "stick-base";
@@ -44,21 +51,23 @@ export function setupJoystick(zone: HTMLElement): Joystick {
 
   let vector = { x: 0, y: 0 };
   let pointerId: number | null = null;
+  let touchId: number | null = null;
 
   function release(): void {
     if (pointerId !== null && zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId);
     pointerId = null;
+    touchId = null;
     vector = { x: 0, y: 0 };
     knob.style.transform = "";
     base.classList.remove("active");
   }
 
-  function follow(event: PointerEvent): void {
+  function follow({ clientX, clientY }: { clientX: number; clientY: number }): void {
     // Measured on each move, so a rotation or resize needs nothing.
     const rect = zone.getBoundingClientRect();
     const reach = (rect.width / 2) * STICK_REACH * 2;
-    let dx = event.clientX - (rect.left + rect.width / 2);
-    let dy = event.clientY - (rect.top + rect.height / 2);
+    let dx = clientX - (rect.left + rect.width / 2);
+    let dy = clientY - (rect.top + rect.height / 2);
     const length = Math.hypot(dx, dy);
     if (length > reach) {
       dx *= reach / length;
@@ -83,6 +92,36 @@ export function setupJoystick(zone: HTMLElement): Joystick {
     zone.addEventListener(type, (event) => {
       if (event.pointerId === pointerId) release();
     });
+  }
+  // The same finger as a touch (see above).
+  const ours = (list: TouchList) => Array.from(list).find((t) => t.identifier === touchId);
+  zone.addEventListener(
+    "touchstart",
+    (event) => {
+      event.preventDefault();
+      if (touchId !== null) return;
+      const touch = event.changedTouches[0];
+      touchId = touch.identifier;
+      base.classList.add("active");
+      follow(touch);
+    },
+    { passive: false },
+  );
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      const touch = touchId === null ? undefined : ours(event.changedTouches);
+      if (touch) follow(touch);
+    },
+    { passive: true },
+  );
+  const liftedCheck = (event: TouchEvent) => {
+    if (touchId !== null && !ours(event.touches)) release();
+  };
+  document.addEventListener("touchend", liftedCheck, { capture: true, passive: true });
+  document.addEventListener("touchcancel", liftedCheck, { capture: true, passive: true });
+  for (const type of ["selectstart", "contextmenu"] as const) {
+    zone.addEventListener(type, (event) => event.preventDefault());
   }
   window.addEventListener("blur", release);
   document.addEventListener("visibilitychange", () => {
