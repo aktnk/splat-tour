@@ -192,6 +192,11 @@ export async function startTour({
   const raycaster = new THREE.Raycaster();
 
   let screen: Screen = "scene";
+  /** The screen shown; the 3DGS scene's own controls (sticks, jump, walk switches) hide on the others (style.css). */
+  function setScreen(next: Screen): void {
+    screen = next;
+    document.body.dataset.screen = next;
+  }
   let current: Scene;
   try {
     current = findScene(manifest, startSceneId ?? manifest.startSceneId);
@@ -436,11 +441,11 @@ export async function startTour({
     setSplatControlsEnabled(false);
     status.setResetVisible(false);
     if (target.type === "url") {
-      screen = "web";
+      setScreen("web");
       overlays.showWeb(target.url, entrance.title);
       return;
     }
-    screen = "mesh";
+    setScreen("mesh");
     overlays.showMesh(entrance.title);
     busy = true;
     status.setLoading(true);
@@ -465,7 +470,7 @@ export async function startTour({
     }
     meshScreen.close();
     overlays.hide();
-    screen = "scene";
+    setScreen("scene");
     setSplatControlsEnabled(true);
     status.setResetVisible(true);
     loop.invalidate();
