@@ -151,8 +151,13 @@ export function setupWalker(initial: WalkOptions): Walker {
   /** Top of the highest solid voxel at (x, z) between `top` and `bottom` (world y), or null. */
   function surface(x: number, z: number, top: number, bottom: number): number | null {
     const step = worldStep() / 2;
-    let wasFree = !obstacle(x, top, z);
-    for (let y = top - step; y >= bottom; y -= step) {
+    // Samples on fixed heights (multiples of the step), not counted from
+    // `top`: top follows the last ground, so samples counted from it would
+    // read a floor a little higher or lower each frame and the eye would
+    // bob (and the frame loop never rest) while standing still.
+    const first = Math.floor(top / step) * step;
+    let wasFree = !obstacle(x, first + step, z);
+    for (let y = first; y >= bottom; y -= step) {
       const isSolid = obstacle(x, y, z);
       if (isSolid && wasFree) return y + step / 2;
       wasFree = !isSolid;
