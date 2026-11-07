@@ -102,7 +102,7 @@ export async function startTour({
   const lookEuler = new THREE.Euler(0, 0, 0, "YXZ");
   const baseMoveSpeed = controls.fpsMovement.moveSpeed;
   const splatView = setupSplatView(scene, camera, sparkRenderer);
-  const markers = setupEntranceMarkers(splatView.root);
+  const markers = setupEntranceMarkers(splatView.root, { renderer });
   // Invisible walls at entrances (drawn with ?debug=1).
   const barriers = setupBarriers(scene);
   barriers.setVisible(debugEnabled);
@@ -353,6 +353,7 @@ export async function startTour({
       glide = null;
       interaction.reset();
       markers.setEntrances([], 1);
+      markers.setGround(null);
       barriers.setScene(null, splatView.root);
       collisionOverlay.clear();
       walker.setGrid(null, null);
@@ -408,6 +409,8 @@ export async function startTour({
       ]);
       if (current !== s) return;
       walker.setGrid(parseVoxelGrid(meta, bin), splatView.root);
+      // Coin shadows fall on the floor the voxels know.
+      markers.setGround((point) => walker.groundAt(point));
       walkBase = { ...settings, ignoreSpecks: true };
       applyEyeLevel();
       walker.setEnabled(settings.start === "walk");
