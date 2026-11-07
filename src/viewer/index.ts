@@ -11,7 +11,7 @@ export { setupScene, type SceneContext } from "./scene";
 export { setupJoystick, setupSparkControls, type AppControls, type Joystick } from "./controls";
 export { defaultFrameLoopOptions, setupFrameLoop, type FrameLoop, type FrameLoopOptions } from "./frame-loop";
 export { setupSplatView, type SplatView } from "./splat-view";
-export { ICON_STYLES, setupEntranceMarkers, type EntranceMarkers, type IconStyle, type MarkerOptions } from "./entrance-markers";
+export { setupEntranceMarkers, type EntranceMarkers, type MarkerOptions } from "./entrance-markers";
 export { setupBarriers, type Barriers } from "./barriers";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";

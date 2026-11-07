@@ -36,18 +36,13 @@ const NEAR_HIDE = 0.25;
 
 type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";
 
-/**
- * How the coins look (being compared, chosen with ?icon=): "flat" the
- * original unlit coin; "medal" lit enamel in a gold bezel; "sign" a lit
- * white plate with a coloured ring and glyph; "dot" a small glowing pearl
- * that turns into the medal when near. Lit styles reflect a room
- * environment (as the model screen) and, in scenes with walk voxels, cast a
- * soft shadow on the floor below.
- */
-export type IconStyle = "flat" | "medal" | "sign" | "dot";
-export const ICON_STYLES: readonly IconStyle[] = ["flat", "medal", "sign", "dot"];
-
-// Calmer colours for the lit styles: the kind still shows, without the
+// Look: far away a coin is a small glowing pearl in its kind's colour; within
+// DOT_NEAR (or hovered) it becomes a medal: calm enamel in a gold bezel,
+// lit by a room environment (as the model screen) so it does not look
+// pasted onto the photographic scene. In scenes with walk voxels it casts a
+// soft shadow on the floor below. Without a renderer (no environment light)
+// the plain unlit coin is drawn instead.
+// Calmer colours for the medal and the pearl: the kind still shows, without the
 // signal-bright look against a photographic scene.
 const CALM_COLOR: Record<IconKind, string> = {
   entrance: "#2d5b8c",
@@ -57,10 +52,9 @@ const CALM_COLOR: Record<IconKind, string> = {
   view: "#1e7a73",
 };
 const GOLD = "#c9a24c";
-const STEEL = "#5c6168";
-/** Lit coins are this much smaller than flat ones. */
+/** Medals are this much smaller than plain coins. */
 const LIT_SIZE = 0.85;
-/** "dot": world distance under which the dot becomes a medal, and the dot's size relative to a coin. */
+/** World distance under which the pearl becomes a medal, and the pearl's size relative to a coin. */
 const DOT_NEAR = 4;
 const DOT_SIZE = 0.38;
 /** Shadows: strongest opacity, and the height (world) over the floor at which they fade out. */
@@ -68,8 +62,8 @@ const SHADOW_OPACITY = 0.45;
 const SHADOW_FADE_HEIGHT = 3;
 
 const ICON_STYLE: Record<IconKind, { color: string; rim: string; glyph: string }> = {
-  entrance: { color: "#2f6fe0", rim: "#1c4596", glyph: "→" },
-  exit: { color: "#e07a2f", rim: "#96501c", glyph: "←" },
+  entrance: { color: "#2f6fe0", rim: "#1c4596", glyph: "入口" },
+  exit: { color: "#e07a2f", rim: "#96501c", glyph: "出口" },
   mesh: { color: "#2e9d5b", rim: "#1c6639", glyph: "3D" },
   url: { color: "#8a4fd6", rim: "#58308f", glyph: "Web" },
   view: { color: "#12a39a", rim: "#0b6a64", glyph: "★" },
@@ -112,7 +106,7 @@ function createFaceTexture(kind: IconKind): THREE.CanvasTexture {
   ctx.stroke();
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = `bold ${glyph.length > 1 ? 36 : 56}px system-ui, sans-serif`;
+  ctx.font = `bold ${glyphSize(glyph, 128)}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
@@ -125,43 +119,30 @@ function createFaceTexture(kind: IconKind): THREE.CanvasTexture {
   return texture;
 }
 
-// Face of a lit coin: "medal" an enamel disc (lighter in the middle) with a
-// cream glyph and a fine light ring; "sign" a pale plate with a coloured
-// ring and glyph.
-function createLitFaceTexture(kind: IconKind, style: "medal" | "sign"): THREE.CanvasTexture {
+// Face of a medal: an enamel disc (lighter in the middle) with a cream
+// glyph and a fine light ring.
+function createMedalFaceTexture(kind: IconKind): THREE.CanvasTexture {
   const size = 256;
   const c = size / 2;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-  const color = CALM_COLOR[kind];
   const { glyph } = ICON_STYLE[kind];
-  if (style === "medal") {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, size, size);
-    const shade = ctx.createRadialGradient(c * 0.8, c * 0.7, 4, c, c, c);
-    shade.addColorStop(0, "rgba(255, 255, 255, 0.28)");
-    shade.addColorStop(1, "rgba(0, 0, 0, 0.25)");
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, 0, size, size);
-    ctx.beginPath();
-    ctx.arc(c, c, c - 22, 0, Math.PI * 2);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(240, 220, 160, 0.85)";
-    ctx.stroke();
-    ctx.fillStyle = "#fbf3dc";
-  } else {
-    ctx.fillStyle = "#f2efe8";
-    ctx.fillRect(0, 0, size, size);
-    ctx.beginPath();
-    ctx.arc(c, c, c - 20, 0, Math.PI * 2);
-    ctx.lineWidth = 14;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    ctx.fillStyle = color;
-  }
-  ctx.font = `bold ${glyph.length > 1 ? 72 : 112}px system-ui, sans-serif`;
+  ctx.fillStyle = CALM_COLOR[kind];
+  ctx.fillRect(0, 0, size, size);
+  const shade = ctx.createRadialGradient(c * 0.8, c * 0.7, 4, c, c, c);
+  shade.addColorStop(0, "rgba(255, 255, 255, 0.28)");
+  shade.addColorStop(1, "rgba(0, 0, 0, 0.25)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, size, size);
+  ctx.beginPath();
+  ctx.arc(c, c, c - 22, 0, Math.PI * 2);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(240, 220, 160, 0.85)";
+  ctx.stroke();
+  ctx.fillStyle = "#fbf3dc";
+  ctx.font = `bold ${glyphSize(glyph, 256)}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
@@ -172,6 +153,11 @@ function createLitFaceTexture(kind: IconKind, style: "medal" | "sign"): THREE.Ca
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   return texture;
+}
+
+/** Font size (px) for a glyph on a face texture `size` px across: the more characters, the smaller. */
+function glyphSize(glyph: string, size: number): number {
+  return Math.round((size / 256) * (glyph.length === 1 ? 112 : glyph.length === 2 ? 84 : 72));
 }
 
 /** A soft round texture: white in the middle fading out (halo), or black (shadow). */
@@ -197,8 +183,7 @@ interface CoinParts {
 }
 
 export interface MarkerOptions {
-  style?: IconStyle;
-  /** Needed for the lit styles (their environment light); without it they fall back to "flat". */
+  /** For the environment light of the medals and pearls; without it the plain unlit coins are drawn. */
   renderer?: THREE.WebGLRenderer;
 }
 
@@ -224,8 +209,7 @@ export interface EntranceMarkers {
 }
 
 export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOptions = {}): EntranceMarkers {
-  const style: IconStyle = options.renderer ? (options.style ?? "flat") : "flat";
-  const lit = style !== "flat";
+  const lit = options.renderer !== undefined;
   const group = new THREE.Group();
   root.add(group);
   const unitRadius = 0.5;
@@ -243,7 +227,7 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     lit && options.renderer
       ? new THREE.PMREMGenerator(options.renderer).fromScene(new RoomEnvironment(), 0.04).texture
       : null;
-  const haloTexture = style === "dot" ? createSoftDiscTexture("rgba(255, 244, 214, 0.9)") : null;
+  const haloTexture = lit ? createSoftDiscTexture("rgba(255, 244, 214, 0.9)") : null;
   const shadowTexture = lit ? createSoftDiscTexture("rgba(0, 0, 0, 1)") : null;
   let groundAt: ((point: THREE.Vector3) => number | null) | null = null;
 
@@ -266,12 +250,10 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
           rim: new THREE.MeshBasicMaterial({ color: ICON_STYLE[kind].rim, toneMapped: false }),
         };
       } else {
-        const sign = style === "sign";
-        const metal = sign ? STEEL : GOLD;
         parts = {
-          face: standard({ map: createLitFaceTexture(kind, sign ? "sign" : "medal"), metalness: 0.1, roughness: sign ? 0.55 : 0.32 }),
-          rim: standard({ color: metal, metalness: 1, roughness: 0.32 }),
-          bezel: standard({ color: metal, metalness: 1, roughness: 0.25 }),
+          face: standard({ map: createMedalFaceTexture(kind), metalness: 0.1, roughness: 0.32 }),
+          rim: standard({ color: GOLD, metalness: 1, roughness: 0.32 }),
+          bezel: standard({ color: GOLD, metalness: 1, roughness: 0.25 }),
         };
       }
       materials.set(kind, parts);
@@ -316,7 +298,7 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     }
     coin.add(body);
     coin.userData.body = body;
-    if (style === "dot" && haloTexture) {
+    if (haloTexture) {
       const dot = new THREE.Group();
       const pearl = new THREE.Mesh(dotGeometry, dotMaterialFor(kind));
       const halo = new THREE.Sprite(
