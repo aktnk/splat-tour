@@ -447,6 +447,12 @@ button {
   }
 }
 
+/* A model or web page is shown: the scene's controls are not for it. */
+body[data-screen="mesh"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level),
+body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level) {
+  display: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   #joystick-zone,
   #look-zone,
