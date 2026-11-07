@@ -12,6 +12,7 @@ export { setupJoystick, setupSparkControls, type AppControls, type Joystick } fr
 export { defaultFrameLoopOptions, setupFrameLoop, type FrameLoop, type FrameLoopOptions } from "./frame-loop";
 export { setupSplatView, type SplatView } from "./splat-view";
 export { setupEntranceMarkers, type EntranceMarkers } from "./entrance-markers";
+export { setupBarriers, type Barriers } from "./barriers";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";
 export { levelingRotation } from "./floor-align";

@@ -75,7 +75,29 @@ export interface Entrance {
    */
   autoThumbnail?: string;
   target: EntranceTarget;
+  /**
+   * An invisible wall at the icon that visitors cannot pass, walking or
+   * flying, so they do not wander past an entrance into the unfinished
+   * edge of a scan. Entrances to another scene have one by default
+   * (`false` turns it off); other icons only if given.
+   */
+  barrier?: Barrier | false;
 }
+
+/** The invisible wall of an entrance: upright, through the icon. */
+export interface Barrier {
+  /** Across, in world units. */
+  width: number;
+  /**
+   * The direction visitors face as they walk up to it (world-frame degrees,
+   * as a view's yaw); the wall stands across it. Left out: from the scene's
+   * first view towards the icon.
+   */
+  yaw?: number;
+}
+
+/** Wall width when the manifest does not give one. */
+export const DEFAULT_BARRIER_WIDTH = 2;
 
 /** Axis-aligned box in scene-local coordinates that the camera cannot leave. */
 export interface Bounds {
@@ -292,7 +314,18 @@ function entrance(value: unknown, path: string): Entrance {
     thumbnail: optImage(e, "thumbnail", "image", path),
     autoThumbnail: optImage(e, "autoThumbnail", "preview", path),
     target: parsedTarget,
+    barrier: barrier(e.barrier, parsedTarget.type === "scene", `${path}.barrier`),
   };
+}
+
+function barrier(value: unknown, byDefault: boolean, path: string): Barrier | false | undefined {
+  if (value === false || value === null) return false;
+  if (value === undefined) return byDefault ? { width: DEFAULT_BARRIER_WIDTH } : undefined;
+  if (value === true) return { width: DEFAULT_BARRIER_WIDTH };
+  const b = obj(value, path);
+  const width = num(b.width, `${path}.width`, DEFAULT_BARRIER_WIDTH);
+  if (width <= 0) fail(`${path}.width`, "正の数である必要があります");
+  return b.yaw === undefined ? { width } : { width, yaw: num(b.yaw, `${path}.yaw`) };
 }
 
 function scene(value: unknown, path: string): Scene {
