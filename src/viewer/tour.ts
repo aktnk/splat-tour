@@ -17,7 +17,7 @@ import { setupScene } from "./scene";
 import { setupJoystick, setupSparkControls } from "./controls";
 import { defaultFrameLoopOptions, setupFrameLoop } from "./frame-loop";
 import { setupSplatView } from "./splat-view";
-import { setupEntranceMarkers } from "./entrance-markers";
+import { ICON_STYLES, setupEntranceMarkers } from "./entrance-markers";
 import { setupEntranceTooltip } from "./entrance-tooltip";
 import { setupEntranceInteraction } from "./entrance-interaction";
 import { setupMeshScreen } from "./mesh-screen";
@@ -63,6 +63,8 @@ export interface TourOptions {
   debug: boolean;
   /** Scene to open instead of startSceneId (authoring aid). */
   startSceneId?: string;
+  /** Look of the entrance icons (see IconStyle; being compared); unknown names give the default. */
+  iconStyle?: string;
 }
 
 async function fetchManifest(url: string): Promise<Manifest> {
@@ -82,6 +84,7 @@ export async function startTour({
   manifestUrl,
   debug: debugEnabled,
   startSceneId,
+  iconStyle: iconStyleName,
 }: TourOptions): Promise<void> {
   const status = setupStatusOverlay(() => resetView());
   const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href;
@@ -102,7 +105,8 @@ export async function startTour({
   const lookEuler = new THREE.Euler(0, 0, 0, "YXZ");
   const baseMoveSpeed = controls.fpsMovement.moveSpeed;
   const splatView = setupSplatView(scene, camera, sparkRenderer);
-  const markers = setupEntranceMarkers(splatView.root);
+  const iconStyle = ICON_STYLES.find((name) => name === iconStyleName);
+  const markers = setupEntranceMarkers(splatView.root, { style: iconStyle, renderer });
   // Invisible walls at entrances (drawn with ?debug=1).
   const barriers = setupBarriers(scene);
   barriers.setVisible(debugEnabled);
@@ -353,6 +357,7 @@ export async function startTour({
       glide = null;
       interaction.reset();
       markers.setEntrances([], 1);
+      markers.setGround(null);
       barriers.setScene(null, splatView.root);
       collisionOverlay.clear();
       walker.setGrid(null, null);
@@ -408,6 +413,8 @@ export async function startTour({
       ]);
       if (current !== s) return;
       walker.setGrid(parseVoxelGrid(meta, bin), splatView.root);
+      // Coin shadows fall on the floor the voxels know.
+      markers.setGround((point) => walker.groundAt(point));
       walkBase = { ...settings, ignoreSpecks: true };
       applyEyeLevel();
       walker.setEnabled(settings.start === "walk");
