@@ -28,6 +28,7 @@ import { setupDebugPanel } from "./debug-panel";
 import { parseVoxelGrid } from "./voxel-grid";
 import { setupWalker, type WalkOptions } from "./walk";
 import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
+import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
@@ -102,6 +103,9 @@ export async function startTour({
   const baseMoveSpeed = controls.fpsMovement.moveSpeed;
   const splatView = setupSplatView(scene, camera, sparkRenderer);
   const markers = setupEntranceMarkers(splatView.root);
+  // Invisible walls at entrances (drawn with ?debug=1).
+  const barriers = setupBarriers(scene);
+  barriers.setVisible(debugEnabled);
   const meshScreen = setupMeshScreen(canvas, renderer);
   const debug = setupDebugPanel(debugEnabled, {
     onAlignStart: () => {
@@ -349,6 +353,7 @@ export async function startTour({
       glide = null;
       interaction.reset();
       markers.setEntrances([], 1);
+      barriers.setScene(null, splatView.root);
       collisionOverlay.clear();
       walker.setGrid(null, null);
       walkBase = null;
@@ -375,6 +380,7 @@ export async function startTour({
         current.entrances.filter((e) => e.target.type !== "view"),
         current.transform.scale,
       );
+      barriers.setScene(current, splatView.root);
       if (current.walk) void loadWalk(current);
     } catch (err) {
       status.showError(`「${current.title}」を読み込めません: ${err instanceof Error ? err.message : String(err)}`);
@@ -581,6 +587,7 @@ export async function startTour({
       controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
       controls.update(camera);
       splatView.clampCamera(current.bounds);
+      barriers.constrain(previous, camera.position);
       settling = walker.constrain(camera, previous, dt);
       if (walker.isEnabled() && walker.blocked() !== shownBlock) showBlock(walker.blocked());
     }
