@@ -11,6 +11,13 @@ import type { VoxelGrid } from "./voxel-grid";
 // (crouching, to MIN_CROUCH of eyeHeight) instead of the walk stopping. Specks (lumps smaller than about
 // SPECK_SIZE across, e.g. floaters) can be ignored for the body.
 //
+// Jumping (jump()) throws the body up to jumpHeight under GRAVITY; in the
+// air it moves on at the height it has and lands on whatever is under its
+// feet, so a running jump gets onto a ledge. Walking off an edge drops the
+// body if there is ground within MAX_DROP below; in the air the body only
+// moves over ground within MAX_DROP of where it took off, so neither a jump
+// nor a drop ends in a hole of the scan.
+//
 // Distances are in world units; the grid answers in scene-local units, so
 // points go through the scene root (its rotation levels the floor, its
 // scale is the scene's). World +Y is up.
@@ -19,6 +26,8 @@ export interface WalkOptions {
   eyeHeight: number;
   radius: number;
   stepHeight: number;
+  /** How high a jump reaches (0: no jumping). */
+  jumpHeight: number;
   /** Lets the body pass through specks (see above). */
   ignoreSpecks: boolean;
 }
@@ -48,6 +57,10 @@ export interface Walker {
   /** Why the last move stopped, or null if it did not. */
   blocked(): WalkBlock | null;
   isEnabled(): boolean;
+  /** Jumps at the next constrain(), if walking on the ground and jumping is allowed. */
+  jump(): void;
+  /** Whether the body is in the air (a jump or a drop). */
+  inAir(): boolean;
   /** Ground height under a world point, or null (no grid, or no ground near). */
   groundAt(position: THREE.Vector3, from?: number): number | null;
   /**
@@ -77,6 +90,22 @@ const BACKOFFS = [0, 0.15, 0.3];
 const MAX_CHECKS_PER_FRAME = 150;
 /** Half the square (in voxels) a surface's direction is read from. */
 const NORMAL_REACH = 2;
+/** World units (metres) per second squared. */
+const GRAVITY = 9.8;
+/** Deepest drop walked off an edge, or below the take-off of a jump (world units). */
+const MAX_DROP = 1.5;
+/** In the air, the body starts this many voxels above the feet: lower things are landed on, not bumped into. */
+const AIR_FOOT_VOXELS = 1.5;
+/** Longest time step of the fall (seconds); a slower frame is split into several. */
+const MAX_AIR_DT = 0.05;
+
+/** A body in the air: feet height and vertical speed (world), where it took off, and the eye height above the feet. */
+interface Air {
+  feet: number;
+  vy: number;
+  base: number;
+  head: number;
+}
 
 export function setupWalker(initial: WalkOptions): Walker {
   let grid: VoxelGrid | null = null;
@@ -94,6 +123,8 @@ export function setupWalker(initial: WalkOptions): Walker {
   // Places tried this frame, and how deep the body is stuck where it stands (null: not stuck).
   let checks = 0;
   let stuckDepth: number | null = null;
+  let air: Air | null = null;
+  let jumpRequested = false;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -291,6 +322,95 @@ export function setupWalker(initial: WalkOptions): Walker {
     return null;
   }
 
+  /** Whether the body fits at (x, z) in the air with its feet at `feet`. */
+  function airFits(x: number, z: number, feet: number, head: number): boolean {
+    const step = worldStep();
+    const top = feet + head + step * HEAD_CLEARANCE_VOXELS;
+    for (let i = -1; i < DIRECTIONS; i++) {
+      const a = (i / DIRECTIONS) * Math.PI * 2;
+      const px = i < 0 ? x : x + Math.cos(a) * options.radius;
+      const pz = i < 0 ? z : z + Math.sin(a) * options.radius;
+      for (let h = feet + step * AIR_FOOT_VOXELS; h <= top; h += step) {
+        if (obstacle(px, h, pz)) {
+          lastFailure = { reason: "body", point: new THREE.Vector3(px, h, pz), height: h - feet };
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /** One frame in the air: the horizontal move at the body's height, then the fall and the landing. */
+  function airStep(a: Air, camera: THREE.Camera, previous: THREE.Vector3, dt: number): boolean {
+    const target = camera.position;
+    const step = worldStep();
+    const margin = step * AIR_FOOT_VOXELS;
+    // A slow frame's fall in short steps (a stalled one counts as a quarter second).
+    let nextFeet = a.feet;
+    for (let left = Math.min(Math.max(dt, 0), 0.25); left > 1e-6; left -= MAX_AIR_DT) {
+      const t = Math.min(left, MAX_AIR_DT);
+      const vy = a.vy - GRAVITY * t;
+      nextFeet += ((a.vy + vy) / 2) * t;
+      a.vy = vy;
+    }
+    // A ceiling stops the rise.
+    if (a.vy > 0 && !airFits(previous.x, previous.z, nextFeet, a.head)) {
+      a.vy = 0;
+      nextFeet = a.feet;
+    }
+    let dx = target.x - previous.x;
+    let dz = target.z - previous.z;
+    const horizontal = Math.hypot(dx, dz);
+    if (horizontal > 1e-9) {
+      const scale = target.distanceTo(previous) / horizontal;
+      dx *= scale;
+      dz *= scale;
+    }
+    const steps = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(Math.hypot(dx, dz) / step)));
+    let x = previous.x;
+    let z = previous.z;
+    let hit: WalkBlock | null = null;
+    const feetForMove = Math.min(a.feet, nextFeet);
+    for (let i = 0; i < steps; i++) {
+      const nx = x + dx / steps;
+      const nz = z + dz / steps;
+      if (!airFits(nx, nz, feetForMove, a.head)) {
+        hit = lastFailure;
+        break;
+      }
+      // Only over ground that can be landed on.
+      if (groundUnder(nx, nz, feetForMove + margin, a.base - MAX_DROP) === null) {
+        hit = { reason: "ground", point: new THREE.Vector3(nx, feetForMove, nz), height: 0 };
+        break;
+      }
+      x = nx;
+      z = nz;
+    }
+    if (dx !== 0 || dz !== 0) block = hit;
+    target.x = x;
+    target.z = z;
+    if (a.vy <= 0) {
+      const land = groundUnder(x, z, a.feet + margin, nextFeet);
+      if (land !== null) {
+        air = null;
+        feet = land;
+        const head = bodyFits(x, z, land) ?? options.eyeHeight * MIN_CROUCH;
+        target.y = land + head;
+        placed.copy(target);
+        return true;
+      }
+    }
+    a.feet = nextFeet;
+    if (a.feet < a.base - MAX_DROP - options.eyeHeight) {
+      // Fell through the floor somehow: find the ground again next frame.
+      air = null;
+      feet = null;
+    }
+    target.y = nextFeet + a.head;
+    placed.copy(target);
+    return true;
+  }
+
   /** How many points of the body (crouched as low as allowed) are in something. */
   function overlap(x: number, z: number, ground: number): number {
     const { radius, stepHeight, eyeHeight } = options;
@@ -310,6 +430,7 @@ export function setupWalker(initial: WalkOptions): Walker {
       grid = g;
       root = r;
       feet = null;
+      air = null;
       if (!g) enabled = false;
     },
     setOptions(o) {
@@ -318,8 +439,13 @@ export function setupWalker(initial: WalkOptions): Walker {
     setEnabled(on) {
       enabled = on && grid !== null;
       feet = null;
+      air = null;
     },
     isEnabled: () => enabled,
+    jump() {
+      if (enabled && air === null && options.jumpHeight > 0) jumpRequested = true;
+    },
+    inAir: () => air !== null,
     grid: () => grid,
     blocked: () => block,
     groundAt(position, from = position.y) {
@@ -330,13 +456,23 @@ export function setupWalker(initial: WalkOptions): Walker {
       if (!enabled || !grid || !root) return false;
       // Where the feet are: the ground last stood on, unless the camera was
       // moved some other way (a glide, a jump to a view); then the first ground below the eye.
-      const kept = feet !== null && previous.distanceToSquared(placed) < 1e-8;
+      const kept = (feet !== null || air !== null) && previous.distanceToSquared(placed) < 1e-8;
+      checks = 0;
+      if (air !== null) {
+        if (kept) return airStep(air, camera, previous, dt);
+        air = null;
+      }
       const ground = kept ? feet : walker.groundAt(previous);
       if (ground === null) {
         // Nothing below (e.g. started in the air over a hole): leave the camera free.
         return false;
       }
-      checks = 0;
+      if (jumpRequested) {
+        jumpRequested = false;
+        const head = bodyFits(previous.x, previous.z, ground) ?? options.eyeHeight * MIN_CROUCH;
+        air = { feet: ground, vy: Math.sqrt(2 * GRAVITY * options.jumpHeight), base: ground, head };
+        return airStep(air, camera, previous, dt);
+      }
       // Stuck in something where the camera stands now? Then steps out are allowed.
       stuckDepth = bodyFits(previous.x, previous.z, ground) === null ? overlap(previous.x, previous.z, ground) : null;
       const target = camera.position;
@@ -366,6 +502,15 @@ export function setupWalker(initial: WalkOptions): Walker {
           continue;
         }
         hit ??= lastFailure;
+        // Off an edge: drop if there is ground not too far below.
+        if (lastFailure?.reason === "ground" && stuckDepth === null) {
+          const below = groundUnder(nx, nz, next.ground - options.stepHeight, next.ground - MAX_DROP);
+          if (below !== null && airFits(nx, nz, next.ground, next.head)) {
+            [x, z] = [nx, nz];
+            air = { feet: next.ground, vy: 0, base: next.ground, head: next.head };
+            break;
+          }
+        }
         // Slide along whatever was hit, at any angle: the step turned away
         // from it as little as works (shortened by the cosine, as sliding
         // along a wall does), around a corner too.
@@ -375,6 +520,12 @@ export function setupWalker(initial: WalkOptions): Walker {
       }
       target.x = x;
       target.z = z;
+      if (air !== null) {
+        // Walked off an edge: the fall starts here.
+        target.y = air.feet + air.head;
+        placed.copy(target);
+        return true;
+      }
       feet = next.ground;
       if (dx !== 0 || dz !== 0) block = hit;
       const eye = next.ground + next.head;

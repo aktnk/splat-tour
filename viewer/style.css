@@ -372,7 +372,21 @@ button {
   z-index: 6;
 }
 
-#move-mode button {
+/* "大人 / 子ども", above "歩く / 飛ぶ" while walking. */
+#eye-level {
+  position: fixed;
+  right: 16px;
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  display: flex;
+  border: 1px solid #4a4e5a;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  z-index: 6;
+}
+
+#move-mode button,
+#eye-level button {
   padding: 8px 12px;
   font-size: 13px;
   background: transparent;
@@ -380,7 +394,8 @@ button {
   border-radius: 0;
 }
 
-#move-mode button[aria-pressed="true"] {
+#move-mode button[aria-pressed="true"],
+#eye-level button[aria-pressed="true"] {
   background: var(--accent);
 }
 
@@ -393,8 +408,46 @@ button {
   z-index: 5;
 }
 
+/* Touch screens: looking around with a second stick on the right, and a
+   jump button beside it; the buttons above move up out of its way. */
+#look-zone {
+  position: fixed;
+  bottom: calc(32px + env(safe-area-inset-bottom));
+  right: 32px;
+  width: 120px;
+  height: 120px;
+  z-index: 5;
+}
+
+#jump-btn {
+  position: fixed;
+  right: 172px;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel-bg);
+  font-size: 12px;
+  z-index: 6;
+}
+
+@media (hover: none), (pointer: coarse) {
+  #reset-view-btn {
+    bottom: calc(176px + env(safe-area-inset-bottom));
+  }
+  #move-mode {
+    bottom: calc(220px + env(safe-area-inset-bottom));
+  }
+  #eye-level {
+    bottom: calc(264px + env(safe-area-inset-bottom));
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
-  #joystick-zone {
+  #joystick-zone,
+  #look-zone,
+  #jump-btn {
     display: none;
   }
 }

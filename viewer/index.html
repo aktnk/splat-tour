@@ -34,6 +34,11 @@
       <button type="button" data-mode="walk" aria-pressed="false" title="床の上を歩く（壁は通り抜けない）">歩く</button>
       <button type="button" data-mode="fly" aria-pressed="false" title="自由に飛んで移動する">飛ぶ</button>
     </div>
+    <div id="eye-level" role="group" aria-label="目の高さ" hidden>
+      <button type="button" data-level="adult" aria-pressed="true" title="大人の目の高さで歩く">大人</button>
+      <button type="button" data-level="child" aria-pressed="false" title="子どもの目の高さで歩く">子ども</button>
+    </div>
+    <button id="jump-btn" type="button" title="ジャンプ（Space キー）" hidden>ジャンプ</button>
 
     <div id="tooltip" hidden>
       <h2 id="tooltip-title"></h2>
@@ -61,6 +66,7 @@
     </div>
 
     <div id="joystick-zone"></div>
+    <div id="look-zone"></div>
 
     <div id="debug-panel" hidden>
       <div id="debug-stats"></div>

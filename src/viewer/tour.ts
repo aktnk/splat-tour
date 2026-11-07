@@ -26,8 +26,8 @@ import { setupStatusOverlay } from "./status-overlay";
 import { setupCollisionOverlay, setupVoxelOverlay } from "./collision-overlay";
 import { setupDebugPanel } from "./debug-panel";
 import { parseVoxelGrid } from "./voxel-grid";
-import { setupWalker } from "./walk";
-import { setupMoveModeSwitch } from "./move-mode";
+import { setupWalker, type WalkOptions } from "./walk";
+import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupSidebar } from "./sidebar";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
@@ -38,6 +38,13 @@ import { captureExtension, captureFrame } from "./capture";
 // No desktop-only APIs here, so an editor can reuse the same code as its preview.
 
 const BASE_JOYSTICK_SPEED = 2.0;
+// The look stick (touch screens), at full tilt (radians per second).
+const LOOK_YAW_SPEED = (120 * Math.PI) / 180;
+const LOOK_PITCH_SPEED = (80 * Math.PI) / 180;
+const MAX_PITCH = (85 * Math.PI) / 180;
+// For voxels tried with ?debug=1 "歩いてみる" (a scene's walk settings have their own).
+const CHILD_EYE_HEIGHT = 1.1;
+const JUMP_HEIGHT = 0.5;
 // Hide the loading indicator even if the initial view shows no splats.
 const LOADING_TIMEOUT_MS = 8000;
 const DEBUG_UPDATE_MS = 500;
@@ -88,6 +95,9 @@ export async function startTour({
   const { scene, camera, renderer, sparkRenderer } = setupScene(canvas);
   const controls = setupSparkControls(canvas);
   const joystick = setupJoystick(document.getElementById("joystick-zone") as HTMLElement);
+  // Right stick on touch screens: turns the view while held.
+  const lookStick = setupJoystick(document.getElementById("look-zone") as HTMLElement);
+  const lookEuler = new THREE.Euler(0, 0, 0, "YXZ");
   const baseMoveSpeed = controls.fpsMovement.moveSpeed;
   const splatView = setupSplatView(scene, camera, sparkRenderer);
   const markers = setupEntranceMarkers(splatView.root);
@@ -108,9 +118,11 @@ export async function startTour({
       return `ボクセル ${grid.resolution} | ${mb} MB | 「歩く」で床の上を歩きます`;
     },
     onWalkSettings: (settings) => {
-      walker.setOptions(settings);
+      walkBase = { ...settings, childEyeHeight: CHILD_EYE_HEIGHT, jumpHeight: JUMP_HEIGHT };
+      applyEyeLevel();
       walker.setEnabled(settings.walking);
       moveMode.setMode(walker.isEnabled() ? "walk" : "fly");
+      updateWalkControls();
       showVoxels = settings.showVoxels;
       voxelCenter = null;
       if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
@@ -121,11 +133,43 @@ export async function startTour({
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.
   // Walking: the scene's walk settings, or voxels tried with ?debug=1 "歩いてみる".
-  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.2, stepHeight: 0.35, ignoreSpecks: true });
+  const walker = setupWalker({ eyeHeight: 1.6, radius: 0.2, stepHeight: 0.35, jumpHeight: JUMP_HEIGHT, ignoreSpecks: true });
+  // The walking settings in use (the scene's, or the debug panel's), before the eye level applies.
+  let walkBase: (WalkOptions & { childEyeHeight: number }) | null = null;
   const moveMode = setupMoveModeSwitch((mode) => {
     walker.setEnabled(mode === "walk");
+    updateWalkControls();
     loop.invalidate();
   });
+  const eyeLevel = setupEyeLevelSwitch(() => {
+    applyEyeLevel();
+    // The eye eases to the new height.
+    loop.invalidate();
+  });
+  const jumpButton = document.getElementById("jump-btn") as HTMLButtonElement;
+  jumpButton.addEventListener("click", () => {
+    jumpButton.blur();
+    jump();
+  });
+
+  function applyEyeLevel(): void {
+    if (!walkBase) return;
+    const eyeHeight = eyeLevel.level() === "child" ? walkBase.childEyeHeight : walkBase.eyeHeight;
+    walker.setOptions({ ...walkBase, eyeHeight });
+  }
+
+  /** "大人 / 子ども" and the jump button, while walking. */
+  function updateWalkControls(): void {
+    const walking = walker.isEnabled();
+    eyeLevel.setAvailable(walking);
+    jumpButton.hidden = !walking || (walkBase?.jumpHeight ?? 0) <= 0;
+  }
+
+  function jump(): void {
+    if (screen !== "scene" || glide || !walker.isEnabled()) return;
+    walker.jump();
+    loop.invalidate();
+  }
   // Where walking last stopped, shown with ?debug=1 "歩いてみる".
   const blockMarker = new THREE.Mesh(
     new THREE.SphereGeometry(1, 12, 8),
@@ -297,7 +341,9 @@ export async function startTour({
       markers.setEntrances([], 1);
       collisionOverlay.clear();
       walker.setGrid(null, null);
+      walkBase = null;
       moveMode.setAvailable(false);
+      updateWalkControls();
       showBlock(null);
       voxelOverlay.show(null, new THREE.Vector3());
       status.setTitles(manifest.title, current.title);
@@ -346,10 +392,12 @@ export async function startTour({
       ]);
       if (current !== s) return;
       walker.setGrid(parseVoxelGrid(meta, bin), splatView.root);
-      walker.setOptions({ ...settings, ignoreSpecks: true });
+      walkBase = { ...settings, ignoreSpecks: true };
+      applyEyeLevel();
       walker.setEnabled(settings.start === "walk");
       moveMode.setMode(settings.start);
       moveMode.setAvailable(true);
+      updateWalkControls();
       loop.invalidate();
     } catch (err) {
       console.warn(`「${s.title}」の歩行用データを読めませんでした（飛んで移動します）:`, err);
@@ -509,6 +557,14 @@ export async function startTour({
       }
     } else {
       const previous = camera.position.clone();
+      const look = lookStick.getMoveVector();
+      if (look.x !== 0 || look.y !== 0) {
+        lookEuler.setFromQuaternion(camera.quaternion, "YXZ");
+        lookEuler.y -= look.x * LOOK_YAW_SPEED * dt;
+        lookEuler.x = Math.min(Math.max(lookEuler.x + look.y * LOOK_PITCH_SPEED * dt, -MAX_PITCH), MAX_PITCH);
+        lookEuler.z = 0;
+        camera.quaternion.setFromEuler(lookEuler);
+      }
       controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
       controls.update(camera);
       splatView.clampCamera(current.bounds);
@@ -608,6 +664,16 @@ export async function startTour({
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.code === "Space" && !event.repeat) {
+      const t = event.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
+      if (t instanceof HTMLButtonElement || t instanceof HTMLAnchorElement) return;
+      if (walker.isEnabled() && screen === "scene") {
+        event.preventDefault();
+        jump();
+      }
+      return;
+    }
     if (event.key !== "Escape") {
       return;
     }
