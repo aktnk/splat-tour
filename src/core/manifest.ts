@@ -93,8 +93,12 @@ export interface WalkSettings {
   /** The .voxel.json, relative to assetBaseUrl. */
   voxels: string;
   eyeHeight: number;
+  /** Eye height when the visitor picks "子ども". */
+  childEyeHeight: number;
   radius: number;
   stepHeight: number;
+  /** How high a jump reaches (0: no jumping). */
+  jumpHeight: number;
   /** How the scene is entered: walking, or flying as without walk settings. */
   start: "walk" | "fly";
 }
@@ -235,8 +239,10 @@ function walk(value: unknown, path: string): WalkSettings {
   return {
     voxels,
     eyeHeight: num(w.eyeHeight, `${path}.eyeHeight`, 1.6),
+    childEyeHeight: num(w.childEyeHeight, `${path}.childEyeHeight`, 1.1),
     radius: num(w.radius, `${path}.radius`, 0.2),
     stepHeight: num(w.stepHeight, `${path}.stepHeight`, 0.35),
+    jumpHeight: num(w.jumpHeight, `${path}.jumpHeight`, 0.5),
     start,
   };
 }

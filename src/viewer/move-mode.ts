@@ -24,6 +24,8 @@ export function setupMoveModeSwitch(onChange: (mode: MoveMode) => void): MoveMod
 
   for (const button of buttons) {
     button.addEventListener("click", () => {
+      // Space jumps; it must not press this button again.
+      button.blur();
       const next = button.dataset.mode as MoveMode;
       if (next === mode) return;
       mode = next;
@@ -41,5 +43,36 @@ export function setupMoveModeSwitch(onChange: (mode: MoveMode) => void): MoveMod
       show();
     },
     mode: () => mode,
+  };
+}
+
+export type EyeLevel = "adult" | "child";
+
+/** "大人 / 子ども" switch, shown while walking: the eye height (walk.childEyeHeight for a child). */
+export interface EyeLevelSwitch {
+  setAvailable(available: boolean): void;
+  level(): EyeLevel;
+}
+
+export function setupEyeLevelSwitch(onChange: (level: EyeLevel) => void): EyeLevelSwitch {
+  const el = document.getElementById("eye-level") as HTMLElement;
+  const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button[data-level]"));
+  // Kept across scenes: a visitor stays a child or an adult.
+  let level: EyeLevel = "adult";
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      button.blur();
+      const next = button.dataset.level as EyeLevel;
+      if (next === level) return;
+      level = next;
+      for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.level === level));
+      onChange(level);
+    });
+  }
+  return {
+    setAvailable(available) {
+      el.hidden = !available;
+    },
+    level: () => level,
   };
 }
