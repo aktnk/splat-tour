@@ -38,9 +38,10 @@ import { captureExtension, captureFrame } from "./capture";
 // No desktop-only APIs here, so an editor can reuse the same code as its preview.
 
 const BASE_JOYSTICK_SPEED = 2.0;
-// The look stick (touch screens), at full tilt (radians per second).
-const LOOK_YAW_SPEED = (120 * Math.PI) / 180;
-const LOOK_PITCH_SPEED = (80 * Math.PI) / 180;
+// The look stick (touch screens), at full tilt (radians per second); the
+// rate grows with the square of the tilt, so a small tilt turns slowly.
+const LOOK_YAW_SPEED = (60 * Math.PI) / 180;
+const LOOK_PITCH_SPEED = (40 * Math.PI) / 180;
 const MAX_PITCH = (85 * Math.PI) / 180;
 // For voxels tried with ?debug=1 "歩いてみる" (a scene's walk settings have their own).
 const CHILD_EYE_HEIGHT = 1.1;
@@ -147,10 +148,14 @@ export async function startTour({
     loop.invalidate();
   });
   const jumpButton = document.getElementById("jump-btn") as HTMLButtonElement;
-  jumpButton.addEventListener("click", () => {
-    jumpButton.blur();
+  // On pointerdown, not click: with a thumb on the move stick, phones may
+  // not send a click for a second finger's tap.
+  jumpButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
     jump();
   });
+  // Space after a click must not press it again (a pointerdown did the jump).
+  jumpButton.addEventListener("click", () => jumpButton.blur());
 
   function applyEyeLevel(): void {
     if (!walkBase) return;
@@ -560,8 +565,11 @@ export async function startTour({
       const look = lookStick.getMoveVector();
       if (look.x !== 0 || look.y !== 0) {
         lookEuler.setFromQuaternion(camera.quaternion, "YXZ");
-        lookEuler.y -= look.x * LOOK_YAW_SPEED * dt;
-        lookEuler.x = Math.min(Math.max(lookEuler.x + look.y * LOOK_PITCH_SPEED * dt, -MAX_PITCH), MAX_PITCH);
+        lookEuler.y -= look.x * Math.abs(look.x) * LOOK_YAW_SPEED * dt;
+        lookEuler.x = Math.min(
+          Math.max(lookEuler.x + look.y * Math.abs(look.y) * LOOK_PITCH_SPEED * dt, -MAX_PITCH),
+          MAX_PITCH,
+        );
         lookEuler.z = 0;
         camera.quaternion.setFromEuler(lookEuler);
       }
