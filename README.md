@@ -11,7 +11,6 @@
 - Vite + TypeScript
 - Three.js
 - [@sparkjsdev/spark](https://sparkjs.dev/)（3DGSレンダラー）
-- nipplejs（タッチ操作用バーチャルジョイスティック）
 
 ## セットアップと起動
 

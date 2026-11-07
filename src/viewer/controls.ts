@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { FpsMovement, PointerControls, SparkControls } from "@sparkjsdev/spark";
-import nipplejs from "nipplejs";
 
 export interface AppControls {
   sparkControls: SparkControls;
@@ -22,47 +21,77 @@ export function setupSparkControls(canvas: HTMLCanvasElement): AppControls {
 }
 
 export interface Joystick {
+  /** Tilt of the stick, -1..1 on each axis (y up). */
   getMoveVector(): { x: number; y: number };
 }
 
-// nipplejs measures the zone's screen position when it is created, so after
-// a rotation or resize the stick's centre would stay where it used to be and
-// every touch would read as "down" (backwards). Rebuild it on those events.
+/** Knob travel as a share of the zone's half width. */
+const STICK_REACH = 0.42;
+
+// A touch joystick in `zone`: a ring and a knob that follows the finger that
+// pressed the zone, and only that finger (pointer capture), so two sticks
+// work side by side. Lifting the finger, the browser cancelling the touch
+// (a system gesture, a notification), losing the capture or the page
+// losing focus all let the stick go: it must never stay tilted.
 export function setupJoystick(zone: HTMLElement): Joystick {
-  let moveVector = { x: 0, y: 0 };
-  let manager: ReturnType<typeof nipplejs.create> | null = null;
+  const base = document.createElement("div");
+  base.className = "stick-base";
+  const knob = document.createElement("div");
+  knob.className = "stick-knob";
+  base.append(knob);
+  zone.append(base);
+  zone.style.touchAction = "none";
 
-  function create(): void {
-    manager?.destroy();
-    moveVector = { x: 0, y: 0 };
-    manager = nipplejs.create({
-      zone,
-      mode: "static",
-      position: { left: "50%", top: "50%" },
-      color: "white",
-    });
-    manager.on("move", (_evt, data) => {
-      moveVector = { x: data.vector.x, y: data.vector.y };
-    });
-    manager.on("end", () => {
-      moveVector = { x: 0, y: 0 };
-    });
+  let vector = { x: 0, y: 0 };
+  let pointerId: number | null = null;
+
+  function release(): void {
+    if (pointerId !== null && zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId);
+    pointerId = null;
+    vector = { x: 0, y: 0 };
+    knob.style.transform = "";
+    base.classList.remove("active");
   }
 
-  let pending = 0;
-  function recreateSoon(): void {
-    // Wait for the layout to settle after the rotation.
-    window.clearTimeout(pending);
-    pending = window.setTimeout(create, 200);
+  function follow(event: PointerEvent): void {
+    // Measured on each move, so a rotation or resize needs nothing.
+    const rect = zone.getBoundingClientRect();
+    const reach = (rect.width / 2) * STICK_REACH * 2;
+    let dx = event.clientX - (rect.left + rect.width / 2);
+    let dy = event.clientY - (rect.top + rect.height / 2);
+    const length = Math.hypot(dx, dy);
+    if (length > reach) {
+      dx *= reach / length;
+      dy *= reach / length;
+    }
+    vector = { x: dx / reach, y: -dy / reach };
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
-  create();
-  window.addEventListener("resize", recreateSoon);
-  window.addEventListener("orientationchange", recreateSoon);
+  zone.addEventListener("pointerdown", (event) => {
+    if (pointerId !== null) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    zone.setPointerCapture(event.pointerId);
+    base.classList.add("active");
+    follow(event);
+  });
+  zone.addEventListener("pointermove", (event) => {
+    if (event.pointerId === pointerId) follow(event);
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
+    zone.addEventListener(type, (event) => {
+      if (event.pointerId === pointerId) release();
+    });
+  }
+  window.addEventListener("blur", release);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) release();
+  });
 
   return {
     getMoveVector() {
-      return moveVector;
+      return vector;
     },
   };
 }
