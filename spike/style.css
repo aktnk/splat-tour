@@ -116,3 +116,23 @@ body {
     display: none;
   }
 }
+
+/* Touch joystick (src/viewer/controls.ts): a ring and a knob that follows the finger. */
+.stick-base {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.stick-knob {
+  width: 46%;
+  height: 46%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+}
