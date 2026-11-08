@@ -96,6 +96,11 @@ export interface Barrier {
   yaw?: number;
 }
 
+/** An invisible wall along points on the floor (at least two). */
+export interface WallLine {
+  points: Vec3[];
+}
+
 /** Wall width when the manifest does not give one. */
 export const DEFAULT_BARRIER_WIDTH = 2;
 
@@ -135,6 +140,14 @@ export interface Scene {
   initialView: View;
   bounds?: Bounds;
   walk?: WalkSettings;
+  /**
+   * Invisible walls placed freely, e.g. across a gap in a scanned wall that
+   * opens onto the dark outside of the scan: each a line through points on
+   * the floor (scene-local; only their horizontal position matters, the
+   * walls are unlimited in height). Like entrance barriers, they cannot be
+   * passed walking or flying.
+   */
+  walls: WallLine[];
   entrances: Entrance[];
 }
 
@@ -318,6 +331,18 @@ function entrance(value: unknown, path: string): Entrance {
   };
 }
 
+function wallLines(value: unknown, path: string): WallLine[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) fail(path, "配列である必要があります");
+  return value.map((item, i) => {
+    const line = obj(item, `${path}[${i}]`);
+    if (!Array.isArray(line.points) || line.points.length < 2) {
+      fail(`${path}[${i}].points`, "2点以上の座標の配列である必要があります");
+    }
+    return { points: line.points.map((p: unknown, j: number) => vec3(p, `${path}[${i}].points[${j}]`)) };
+  });
+}
+
 function barrier(value: unknown, byDefault: boolean, path: string): Barrier | false | undefined {
   if (value === false || value === null) return false;
   if (value === undefined) return byDefault ? { width: DEFAULT_BARRIER_WIDTH } : undefined;
@@ -367,6 +392,7 @@ function scene(value: unknown, path: string): Scene {
         : view(s.initialView, `${path}.initialView`),
     bounds: s.bounds === undefined ? undefined : bounds(s.bounds, `${path}.bounds`),
     walk: s.walk === undefined ? undefined : walk(s.walk, `${path}.walk`),
+    walls: wallLines(s.walls, `${path}.walls`),
     entrances: entrances.map((e, i) => entrance(e, `${path}.entrances[${i}]`)),
   };
 }
