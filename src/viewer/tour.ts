@@ -4,6 +4,7 @@ import {
   entranceThumbnail,
   findScene,
   isExternalPage,
+  manifestWarnings,
   parseManifest,
   resolveAssetUrl,
   voxelBinPath,
@@ -65,7 +66,8 @@ export interface TourOptions {
   startSceneId?: string;
 }
 
-async function fetchManifest(url: string): Promise<Manifest> {
+/** The manifest, and the fields of the file it does not use (see manifestWarnings). */
+async function fetchManifest(url: string): Promise<{ manifest: Manifest; warnings: string[] }> {
   const response = await fetch(url, { cache: "no-cache" });
   if (!response.ok) {
     const hint =
@@ -74,7 +76,8 @@ async function fetchManifest(url: string): Promise<Manifest> {
         : "";
     throw new Error(`manifest を読み込めません: ${url} (${response.status})${hint}`);
   }
-  return parseManifest(await response.json());
+  const json: unknown = await response.json();
+  return { manifest: parseManifest(json), warnings: manifestWarnings(json) };
 }
 
 export async function startTour({
@@ -86,8 +89,9 @@ export async function startTour({
   const status = setupStatusOverlay(() => resetView());
   const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href;
   let manifest: Manifest;
+  let manifestNotes: string[];
   try {
-    manifest = await fetchManifest(absoluteManifestUrl);
+    ({ manifest, warnings: manifestNotes } = await fetchManifest(absoluteManifestUrl));
   } catch (err) {
     status.showError(err instanceof Error ? err.message : String(err));
     return;
@@ -134,6 +138,9 @@ export async function startTour({
       loop.invalidate();
     },
   });
+  // Fields the viewer ignores (often misspelt): in the console, and on the debug panel.
+  for (const note of manifestNotes) console.warn(`manifest.json: ${note}`);
+  debug.showWarnings(manifestNotes);
   // Only used with ?debug=1; cleared when another scene loads.
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.

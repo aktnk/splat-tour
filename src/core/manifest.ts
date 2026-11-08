@@ -492,3 +492,105 @@ export function entranceThumbnail(entrance: Entrance): string | undefined {
   if (entrance.target.type === "url") return entrance.thumbnail;
   return entrance.thumbnail ?? entrance.autoThumbnail;
 }
+
+// Unknown fields: the parser ignores what it does not read, so a misspelt
+// name ("wall" for "walls") silently does nothing. manifestWarnings lists
+// them, with the known name they most look like. Names starting with "_" or
+// "$" (comments, "$schema") are left alone.
+
+const KNOWN_KEYS: Record<string, readonly string[]> = {
+  manifest: ["version", "title", "startSceneId", "assetBaseUrl", "scenes"],
+  scene: ["id", "title", "splat", "transform", "render", "camera", "initialView", "bounds", "walk", "walls", "entrances"],
+  splat: ["url", "paged"],
+  transform: ["rotation", "flipX", "flipY", "flipZ", "scale"],
+  render: ["exposure", "focalAdjustment"],
+  camera: ["moveSpeed", "fov"],
+  view: ["position", "yaw", "pitch"],
+  bounds: ["min", "max"],
+  walk: ["voxels", "eyeHeight", "childEyeHeight", "radius", "stepHeight", "jumpHeight", "start"],
+  wall: ["points", "height"],
+  entrance: ["id", "position", "kind", "title", "description", "thumbnail", "image", "autoThumbnail", "preview", "target", "barrier"],
+  barrier: ["width", "yaw", "height"],
+  "target.scene": ["type", "sceneId", "arrival"],
+  "target.mesh": ["type", "url", "exposure"],
+  "target.url": ["type", "url"],
+  "target.view": ["type", "view"],
+};
+
+/** Edit distance with swapped neighbours counting as one edit, for "did you mean". */
+function distance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[a.length][b.length];
+}
+
+function isObject(value: unknown): value is Json {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Fields of a manifest (as read from the file) that the viewer does not
+ * use, e.g. misspelt ones, as messages with their path. Empty when all are
+ * known; never throws (the manifest may be invalid too).
+ */
+export function manifestWarnings(value: unknown): string[] {
+  const warnings: string[] = [];
+  const check = (o: unknown, kind: string, path: string) => {
+    if (!isObject(o)) return;
+    const known = KNOWN_KEYS[kind];
+    for (const key of Object.keys(o)) {
+      if (known.includes(key) || key.startsWith("_") || key.startsWith("$")) continue;
+      const lower = key.toLowerCase();
+      const guess =
+        known.find((k) => k.toLowerCase() === lower) ??
+        known
+          .map((k) => ({ k, d: distance(lower, k.toLowerCase()), prefix: k.toLowerCase().startsWith(lower) }))
+          .filter(({ d }) => d <= Math.max(1, Math.floor(key.length / 4)))
+          // Closest first; on a tie, a name that starts with what was typed ("wall" → "walls").
+          .sort((x, y) => x.d - y.d || Number(y.prefix) - Number(x.prefix))[0]?.k;
+      const where = path ? `${path}.${key}` : key;
+      warnings.push(guess ? `${where} は使われていません（${guess} の間違いではありませんか）` : `${where} は使われていません`);
+    }
+  };
+  const each = (list: unknown, f: (item: unknown, path: string) => void, path: string) => {
+    if (Array.isArray(list)) list.forEach((item, i) => f(item, `${path}[${i}]`));
+  };
+  check(value, "manifest", "");
+  if (!isObject(value)) return warnings;
+  each(
+    value.scenes,
+    (s, sp) => {
+      check(s, "scene", sp);
+      if (!isObject(s)) return;
+      for (const kind of ["splat", "transform", "render", "camera", "bounds", "walk"] as const) check(s[kind], kind, `${sp}.${kind}`);
+      check(s.initialView, "view", `${sp}.initialView`);
+      each(s.walls, (w, wp) => check(w, "wall", wp), `${sp}.walls`);
+      each(
+        s.entrances,
+        (e, ep) => {
+          check(e, "entrance", ep);
+          if (!isObject(e)) return;
+          if (isObject(e.barrier)) check(e.barrier, "barrier", `${ep}.barrier`);
+          const t = e.target;
+          if (isObject(t) && typeof t.type === "string" && KNOWN_KEYS[`target.${t.type}`]) {
+            check(t, `target.${t.type}`, `${ep}.target`);
+            check(t.arrival, "view", `${ep}.target.arrival`);
+            check(t.view, "view", `${ep}.target.view`);
+          }
+        },
+        `${sp}.entrances`,
+      );
+    },
+    "scenes",
+  );
+  return warnings;
+}

@@ -25,6 +25,8 @@ export interface DebugPanel {
   showAlignResult(transformJson: string | null): void;
   /** Status line of "歩いてみる" (e.g. the ground under the camera). */
   showWalkInfo(text: string): void;
+  /** Problems with the manifest that did not stop it loading (e.g. unknown, misspelt fields). */
+  showWarnings(warnings: string[]): void;
 }
 
 export interface WalkPanelSettings {
@@ -143,6 +145,11 @@ export function setupDebugPanel(
     enabled,
     showWalkInfo(text: string) {
       walkInfo.textContent = text;
+    },
+    showWarnings(warnings: string[]) {
+      const el = document.getElementById("debug-warnings") as HTMLElement;
+      el.textContent = warnings.length ? `manifest.json の注意（${warnings.length}件）\n${warnings.map((w) => `・${w}`).join("\n")}` : "";
+      el.hidden = warnings.length === 0;
     },
     update(s: DebugSnapshot) {
       if (!enabled) {
