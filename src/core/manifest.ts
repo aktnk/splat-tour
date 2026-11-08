@@ -94,15 +94,21 @@ export interface Barrier {
    * first view towards the icon.
    */
   yaw?: number;
+  /** Up from the floor below the icon, in world units; walking above it (a walkway overhead) is not blocked. */
+  height: number;
 }
 
 /** An invisible wall along points on the floor (at least two). */
 export interface WallLine {
   points: Vec3[];
+  /** Up from the lowest point, in world units; walking above it (a walkway overhead) is not blocked. */
+  height: number;
 }
 
 /** Wall width when the manifest does not give one. */
 export const DEFAULT_BARRIER_WIDTH = 2;
+/** Wall height when the manifest does not give one: well above a jump. */
+export const DEFAULT_WALL_HEIGHT = 3;
 
 /** Axis-aligned box in scene-local coordinates that the camera cannot leave. */
 export interface Bounds {
@@ -143,9 +149,8 @@ export interface Scene {
   /**
    * Invisible walls placed freely, e.g. across a gap in a scanned wall that
    * opens onto the dark outside of the scan: each a line through points on
-   * the floor (scene-local; only their horizontal position matters, the
-   * walls are unlimited in height). Like entrance barriers, they cannot be
-   * passed walking or flying.
+   * the floor (scene-local), `height` tall from the lowest point. Like
+   * entrance barriers, they cannot be passed walking or flying.
    */
   walls: WallLine[];
   entrances: Entrance[];
@@ -339,18 +344,23 @@ function wallLines(value: unknown, path: string): WallLine[] {
     if (!Array.isArray(line.points) || line.points.length < 2) {
       fail(`${path}[${i}].points`, "2点以上の座標の配列である必要があります");
     }
-    return { points: line.points.map((p: unknown, j: number) => vec3(p, `${path}[${i}].points[${j}]`)) };
+    const height = num(line.height, `${path}[${i}].height`, DEFAULT_WALL_HEIGHT);
+    if (height <= 0) fail(`${path}[${i}].height`, "正の数である必要があります");
+    return { points: line.points.map((p: unknown, j: number) => vec3(p, `${path}[${i}].points[${j}]`)), height };
   });
 }
 
 function barrier(value: unknown, byDefault: boolean, path: string): Barrier | false | undefined {
   if (value === false || value === null) return false;
-  if (value === undefined) return byDefault ? { width: DEFAULT_BARRIER_WIDTH } : undefined;
-  if (value === true) return { width: DEFAULT_BARRIER_WIDTH };
+  const defaults = { width: DEFAULT_BARRIER_WIDTH, height: DEFAULT_WALL_HEIGHT };
+  if (value === undefined) return byDefault ? defaults : undefined;
+  if (value === true) return defaults;
   const b = obj(value, path);
   const width = num(b.width, `${path}.width`, DEFAULT_BARRIER_WIDTH);
   if (width <= 0) fail(`${path}.width`, "正の数である必要があります");
-  return b.yaw === undefined ? { width } : { width, yaw: num(b.yaw, `${path}.yaw`) };
+  const height = num(b.height, `${path}.height`, DEFAULT_WALL_HEIGHT);
+  if (height <= 0) fail(`${path}.height`, "正の数である必要があります");
+  return b.yaw === undefined ? { width, height } : { width, height, yaw: num(b.yaw, `${path}.yaw`) };
 }
 
 function scene(value: unknown, path: string): Scene {

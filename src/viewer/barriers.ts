@@ -1,59 +1,87 @@
 import * as THREE from "three";
 import type { Scene } from "../core/manifest";
 
-// Invisible walls at entrance icons (Entrance.barrier): visitors cannot
-// pass them, walking or flying, so they do not wander past an entrance into
-// the unfinished edge of a scan. A wall is upright through the icon, as
-// wide as the barrier says and unlimited in height (a jump or a flight does
-// not get over it), standing across the direction visitors face as they
-// walk up to it. The camera is kept STAND_OFF in front of it, so the icon
-// is not passed or hidden (coins nearer than NEAR_HIDE disappear), and a
-// move into it slides along it. Whichever side the camera is on is kept, so
-// a wall never shuts anyone in.
+// Invisible walls: at entrance icons (Entrance.barrier), so visitors do not
+// wander past an entrance into the unfinished edge of a scan, and drawn
+// freely (Scene.walls: lines through points on the floor, one wall per
+// segment), e.g. across a gap in a scanned wall.
 //
-// Scenes also have walls drawn freely (Scene.walls), e.g. across a gap in a
-// scanned wall: lines through points on the floor, one wall per segment,
-// kept LINE_STAND_OFF away (about a body).
+// Walking, a wall is part of the collision world (bodyBlocked, used by
+// walk.ts like the scan's voxels): a slab WALL_THICKNESS thick, from the
+// floor below it up `height`, so the walker bumps into it, slides along it
+// and rounds its corners exactly as along a scanned wall, and a walkway
+// above it is not blocked. An entrance's wall stands ENTRANCE_SETBACK in
+// front of the icon (on the side visitors come from), so the icon is still
+// in view where the walker stops.
 //
-// Walls work in world xz: the icon's scene-local position goes through the
-// scene root (its rotation levels the floor), and the barrier's yaw is a
-// world-frame view direction like a view's yaw.
+// Flying, the walls are unlimited in height (constrain): a flight must not
+// get over one into the dark. The camera is kept STAND_OFF in front of an
+// entrance's icon and LINE_STAND_OFF off a drawn wall, sliding along;
+// whichever side it is on is kept, so a wall never shuts anyone in.
+//
+// An entrance wall stands across the direction visitors face as they walk
+// up (the barrier's yaw, a world-frame view direction, or from the scene's
+// first view towards the icon). Everything is in world coordinates: points
+// go through the scene root (its rotation levels the floor).
 
-/** How far in front of a wall the camera stays (world units): far enough that an icon at waist height is still in view. */
+/** Flying: how far in front of an entrance's icon the camera stays (world units), so the icon stays in view. */
 const STAND_OFF = 1.0;
-/** How far from a drawn wall (Scene.walls) the camera stays: about a body (world units). */
+/** Flying: how far from a drawn wall the camera stays: about a body (world units). */
 const LINE_STAND_OFF = 0.3;
-/** Extra reach past each end of a wall: about a body's radius (world units). */
+/** Flying: extra reach past each end of a wall: about a body's radius (world units). */
 const END_MARGIN = 0.2;
-/** Height of the walls as drawn for ?debug=1 (they block at any height). */
-const SHOWN_HEIGHT = 3;
+/** Walking: thickness of a wall's slab (world units), a couple of voxels. */
+const WALL_THICKNESS = 0.2;
+/** Walking: an entrance's wall stands this far in front of its icon (world units). */
+const ENTRANCE_SETBACK = 0.8;
+/** Walking: a drawn wall starts this far below its lowest point (clicked on the floor). */
+const BELOW_FLOOR = 0.1;
+/** Walking: where the floor below an entrance is unknown, its wall starts this far below the icon. */
+const ICON_ABOVE_FLOOR = 1.5;
 
-interface Wall {
-  /** Middle (the icon, or a segment's middle), world. */
+/** A wall in the horizontal plane (world xz): middle, unit normal, half length. */
+interface Line {
   cx: number;
   cz: number;
-  /** Middle height of the wall as drawn. */
-  cy: number;
-  /** Unit normal (the direction visitors face, for an icon); tangent across it. */
   nx: number;
   nz: number;
   half: number;
+}
+
+/** Flying form: unlimited in height. */
+interface FlyWall extends Line {
   standOff: number;
+}
+
+/** Walking form: a slab between two heights. */
+interface BodyWall extends Line {
+  bottom: number;
+  top: number;
 }
 
 export interface Barriers {
   /** The walls of a scene's entrances and its drawn walls (none for null); call once its root has its transform. */
   setScene(scene: Scene | null, root: THREE.Object3D): void;
-  /** Keeps a camera move (world) on its side of every wall, sliding along; true if it changed the move. */
+  /**
+   * Floor height (world y) under a world point, or null: where an entrance's
+   * wall starts when walking (else a guess below its icon).
+   */
+  setGround(groundAt: ((point: THREE.Vector3) => number | null) | null): void;
+  /** Flying: keeps a camera move (world) on its side of every wall, sliding along; true if it changed the move. */
   constrain(previous: THREE.Vector3, target: THREE.Vector3): boolean;
-  /** Draws the walls (for ?debug=1 and the authoring tool). */
+  /** Walking: whether a world point is inside a wall's slab (for the walker's body, like a solid voxel). */
+  bodyBlocked(x: number, y: number, z: number): boolean;
+  /** Draws the walls as walking meets them (for ?debug=1 and the authoring tool). */
   setVisible(visible: boolean): void;
 }
 
 const DEG = Math.PI / 180;
 
 export function setupBarriers(scene: THREE.Scene): Barriers {
-  let walls: Wall[] = [];
+  let flyWalls: FlyWall[] = [];
+  let bodyWalls: BodyWall[] = [];
+  let current: { scene: Scene; root: THREE.Object3D } | null = null;
+  let groundAt: ((point: THREE.Vector3) => number | null) | null = null;
   let visible = false;
   const group = new THREE.Group();
   group.visible = false;
@@ -70,9 +98,9 @@ export function setupBarriers(scene: THREE.Scene): Barriers {
     for (const child of group.children) (child as THREE.Mesh).geometry.dispose();
     group.clear();
     if (!visible) return;
-    for (const w of walls) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w.half * 2, SHOWN_HEIGHT), material);
-      mesh.position.set(w.cx, w.cy, w.cz);
+    for (const w of bodyWalls) {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w.half * 2, w.top - w.bottom), material);
+      mesh.position.set(w.cx, (w.bottom + w.top) / 2, w.cz);
       // The plane faces +z; turn it to face along the normal.
       mesh.rotation.y = Math.atan2(w.nx, w.nz);
       mesh.renderOrder = 1000;
@@ -80,61 +108,86 @@ export function setupBarriers(scene: THREE.Scene): Barriers {
     }
   }
 
+  function build(): void {
+    flyWalls = [];
+    bodyWalls = [];
+    if (!current) return;
+    const { scene: s, root } = current;
+    root.updateMatrixWorld(true);
+    const start = root.localToWorld(new THREE.Vector3(...s.initialView.position));
+    for (const e of s.entrances) {
+      if (!e.barrier || e.target.type === "view") continue;
+      const c = root.localToWorld(new THREE.Vector3(...e.position));
+      let nx: number;
+      let nz: number;
+      if (e.barrier.yaw !== undefined) {
+        // A camera with this yaw looks along (-sin, -cos).
+        nx = -Math.sin(e.barrier.yaw * DEG);
+        nz = -Math.cos(e.barrier.yaw * DEG);
+      } else {
+        nx = c.x - start.x;
+        nz = c.z - start.z;
+      }
+      const n = Math.hypot(nx, nz);
+      if (n < 1e-6) {
+        nx = 0;
+        nz = -1;
+      } else {
+        nx /= n;
+        nz /= n;
+      }
+      const half = e.barrier.width / 2;
+      flyWalls.push({ cx: c.x, cz: c.z, nx, nz, half, standOff: STAND_OFF });
+      // Visitors face +n as they come, so they are on the -n side.
+      const floor = groundAt?.(c.clone()) ?? null;
+      const bottom = floor ?? c.y - ICON_ABOVE_FLOOR;
+      bodyWalls.push({
+        cx: c.x - nx * ENTRANCE_SETBACK,
+        cz: c.z - nz * ENTRANCE_SETBACK,
+        nx,
+        nz,
+        half,
+        bottom,
+        top: bottom + e.barrier.height,
+      });
+    }
+    for (const line of s.walls) {
+      const points = line.points.map((p) => root.localToWorld(new THREE.Vector3(...p)));
+      const bottom = Math.min(...points.map((p) => p.y)) - BELOW_FLOOR;
+      for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1];
+        const b = points[i];
+        const length = Math.hypot(b.x - a.x, b.z - a.z);
+        if (length < 1e-6) continue;
+        const segment: Line = {
+          cx: (a.x + b.x) / 2,
+          cz: (a.z + b.z) / 2,
+          nx: -(b.z - a.z) / length,
+          nz: (b.x - a.x) / length,
+          half: length / 2,
+        };
+        flyWalls.push({ ...segment, standOff: LINE_STAND_OFF });
+        // Half a slab longer at each end, so the segments of a line close at their corners.
+        bodyWalls.push({ ...segment, half: segment.half + WALL_THICKNESS / 2, bottom, top: bottom + BELOW_FLOOR + line.height });
+      }
+    }
+  }
+
   return {
     setScene(s, root) {
-      walls = [];
-      if (s) {
-        root.updateMatrixWorld(true);
-        const start = root.localToWorld(new THREE.Vector3(...s.initialView.position));
-        for (const e of s.entrances) {
-          if (!e.barrier || e.target.type === "view") continue;
-          const c = root.localToWorld(new THREE.Vector3(...e.position));
-          let nx: number;
-          let nz: number;
-          if (e.barrier.yaw !== undefined) {
-            // A camera with this yaw looks along (-sin, -cos).
-            nx = -Math.sin(e.barrier.yaw * DEG);
-            nz = -Math.cos(e.barrier.yaw * DEG);
-          } else {
-            nx = c.x - start.x;
-            nz = c.z - start.z;
-          }
-          const n = Math.hypot(nx, nz);
-          if (n < 1e-6) {
-            nx = 0;
-            nz = -1;
-          } else {
-            nx /= n;
-            nz /= n;
-          }
-          walls.push({ cx: c.x, cy: c.y, cz: c.z, nx, nz, half: e.barrier.width / 2, standOff: STAND_OFF });
-        }
-        for (const line of s.walls) {
-          const points = line.points.map((p) => root.localToWorld(new THREE.Vector3(...p)));
-          for (let i = 1; i < points.length; i++) {
-            const a = points[i - 1];
-            const b = points[i];
-            const length = Math.hypot(b.x - a.x, b.z - a.z);
-            if (length < 1e-6) continue;
-            walls.push({
-              cx: (a.x + b.x) / 2,
-              cz: (a.z + b.z) / 2,
-              // Clicked on the floor: drawn from there up.
-              cy: Math.min(a.y, b.y) + SHOWN_HEIGHT / 2,
-              nx: -(b.z - a.z) / length,
-              nz: (b.x - a.x) / length,
-              half: length / 2,
-              standOff: LINE_STAND_OFF,
-            });
-          }
-        }
-      }
+      current = s ? { scene: s, root } : null;
+      build();
+      draw();
+    },
+    setGround(fn) {
+      groundAt = fn;
+      build();
       draw();
     },
     constrain(previous, target) {
       let changed = false;
       // Twice: a slide along one wall can run into the next at a corner.
-      for (let pass = 0; pass < 2; pass++) for (const w of walls) {
+      for (let pass = 0; pass < 2; pass++) for (const w of flyWalls) {
         // Tangent (across the approach direction).
         const tx = -w.nz;
         const tz = w.nx;
@@ -159,6 +212,16 @@ export function setupBarriers(scene: THREE.Scene): Barriers {
         changed = true;
       }
       return changed;
+    },
+    bodyBlocked(x, y, z) {
+      for (const w of bodyWalls) {
+        if (y < w.bottom || y > w.top) continue;
+        const dx = x - w.cx;
+        const dz = z - w.cz;
+        if (Math.abs(dx * w.nx + dz * w.nz) > WALL_THICKNESS / 2) continue;
+        if (Math.abs(-dx * w.nz + dz * w.nx) <= w.half) return true;
+      }
+      return false;
     },
     setVisible(v) {
       visible = v;
