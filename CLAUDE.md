@@ -32,7 +32,7 @@ npm run spike:dev     # loading measurement viewer on port 5180 (counts bytes se
 
 (`viewer:dev` / `viewer:build` are aliases of `dev` / `build`; `tools/publish/bundle.mjs` calls `viewer:build`.)
 
-There is no test runner and no linter configured. `tsconfig.json` is strict with `noUnusedLocals`/`noUnusedParameters`, so unused imports or variables fail `npm run build`. The conversion tools (splat-transform, gltf-transform via npx; Spark's Rust `build-lod`, built into `tools/.cache/`) may not be runnable in a sandbox; test file handling with a stand-in via `SPARK_BUILD_LOD=<script>`.
+There is no test runner and no linter configured; GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci` and `npm run build` on every pull request and on main. `tsconfig.json` is strict with `noUnusedLocals`/`noUnusedParameters`, so unused imports or variables fail `npm run build`. The conversion tools (splat-transform, gltf-transform via npx; Spark's Rust `build-lod`, built into `tools/.cache/`) may not be runnable in a sandbox; test file handling with a stand-in via `SPARK_BUILD_LOD=<script>`.
 
 `spike/` is a measurement viewer used to decide the web asset format on real phones; see `spike/README.md`. Converted assets under `spike/assets/` are gitignored. Spark 2.1 reads SPZ only up to v3, so SPZ output must be written with `--spz-version 3`.
 
