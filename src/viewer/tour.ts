@@ -4,6 +4,7 @@ import {
   entranceThumbnail,
   findScene,
   isExternalPage,
+  manifestWarnings,
   parseManifest,
   resolveAssetUrl,
   voxelBinPath,
@@ -65,7 +66,8 @@ export interface TourOptions {
   startSceneId?: string;
 }
 
-async function fetchManifest(url: string): Promise<Manifest> {
+/** The manifest, and the fields of the file it does not use (see manifestWarnings). */
+async function fetchManifest(url: string): Promise<{ manifest: Manifest; warnings: string[] }> {
   const response = await fetch(url, { cache: "no-cache" });
   if (!response.ok) {
     const hint =
@@ -74,7 +76,8 @@ async function fetchManifest(url: string): Promise<Manifest> {
         : "";
     throw new Error(`manifest を読み込めません: ${url} (${response.status})${hint}`);
   }
-  return parseManifest(await response.json());
+  const json: unknown = await response.json();
+  return { manifest: parseManifest(json), warnings: manifestWarnings(json) };
 }
 
 export async function startTour({
@@ -86,8 +89,9 @@ export async function startTour({
   const status = setupStatusOverlay(() => resetView());
   const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href;
   let manifest: Manifest;
+  let manifestNotes: string[];
   try {
-    manifest = await fetchManifest(absoluteManifestUrl);
+    ({ manifest, warnings: manifestNotes } = await fetchManifest(absoluteManifestUrl));
   } catch (err) {
     status.showError(err instanceof Error ? err.message : String(err));
     return;
@@ -134,11 +138,16 @@ export async function startTour({
       loop.invalidate();
     },
   });
+  // Fields the viewer ignores (often misspelt): in the console, and on the debug panel.
+  for (const note of manifestNotes) console.warn(`manifest.json: ${note}`);
+  debug.showWarnings(manifestNotes);
   // Only used with ?debug=1; cleared when another scene loads.
   const collisionOverlay = setupCollisionOverlay(splatView.root, () => loop.invalidate());
   // ?debug=1 "歩いてみる": walking on voxel data picked in the panel.
   // Walking: the scene's walk settings, or voxels tried with ?debug=1 "歩いてみる".
   const walker = setupWalker({ eyeHeight: 1.6, radius: 0.2, stepHeight: 0.35, jumpHeight: JUMP_HEIGHT, ignoreSpecks: true });
+  // The invisible walls stop the walking body as the scan's voxels do.
+  walker.setBodyObstacle((x, y, z) => barriers.bodyBlocked(x, y, z));
   // The walking settings in use (the scene's, or the debug panel's), before the eye level applies.
   let walkBase: (WalkOptions & { childEyeHeight: number }) | null = null;
   const moveMode = setupMoveModeSwitch((mode) => {
@@ -355,6 +364,7 @@ export async function startTour({
       markers.setEntrances([], 1);
       markers.setGround(null);
       barriers.setScene(null, splatView.root);
+      barriers.setGround(null);
       collisionOverlay.clear();
       walker.setGrid(null, null);
       walkBase = null;
@@ -409,8 +419,9 @@ export async function startTour({
       ]);
       if (current !== s) return;
       walker.setGrid(parseVoxelGrid(meta, bin), splatView.root);
-      // Coin shadows fall on the floor the voxels know.
+      // Coin shadows fall, and entrance walls stand, on the floor the voxels know.
       markers.setGround((point) => walker.groundAt(point));
+      barriers.setGround((point) => walker.groundAt(point));
       walkBase = { ...settings, ignoreSpecks: true };
       applyEyeLevel();
       walker.setEnabled(settings.start === "walk");
@@ -590,7 +601,8 @@ export async function startTour({
       controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
       controls.update(camera);
       splatView.clampCamera(current.bounds);
-      barriers.constrain(previous, camera.position);
+      // Walking meets the walls as part of the collision (walk.ts); flying, as unlimited walls.
+      if (!walker.isEnabled()) barriers.constrain(previous, camera.position);
       settling = walker.constrain(camera, previous, dt);
       if (walker.isEnabled() && walker.blocked() !== shownBlock) showBlock(walker.blocked());
     }

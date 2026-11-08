@@ -492,6 +492,20 @@ body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #
   }
 }
 
+/* Unknown manifest fields (?debug=1), at the top of the debug panel. */
+#debug-warnings {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 170, 40, 0.18);
+  border: 1px solid rgba(255, 170, 40, 0.6);
+  color: #ffd79a;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 30vh;
+  overflow: auto;
+}
+
 #debug-panel {
   position: fixed;
   top: 44px;

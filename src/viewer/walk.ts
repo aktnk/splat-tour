@@ -9,7 +9,8 @@ import type { VoxelGrid } from "./voxel-grid";
 // than the body are stepped over). The body is a column of `radius` from just
 // above the step height to the eyes; under a low ceiling the eyes come down
 // (crouching, to MIN_CROUCH of eyeHeight) instead of the walk stopping. Specks (lumps smaller than about
-// SPECK_SIZE across, e.g. floaters) can be ignored for the body.
+// SPECK_SIZE across, e.g. floaters) can be ignored for the body. The
+// invisible walls (barriers.ts) join the voxels for the body, not as floor.
 //
 // Jumping (jump()) throws the body up to jumpHeight under GRAVITY; in the
 // air it moves on at the height it has and lands on whatever is under its
@@ -61,6 +62,8 @@ export interface Walker {
   jump(): void;
   /** Whether the body is in the air (a jump or a drop). */
   inAir(): boolean;
+  /** More things the body bumps into, as world points (the invisible walls), besides the voxels. */
+  setBodyObstacle(test: ((x: number, y: number, z: number) => boolean) | null): void;
   /** Ground height under a world point, or null (no grid, or no ground near). */
   groundAt(position: THREE.Vector3, from?: number): number | null;
   /**
@@ -125,6 +128,7 @@ export function setupWalker(initial: WalkOptions): Walker {
   let stuckDepth: number | null = null;
   let air: Air | null = null;
   let jumpRequested = false;
+  let extraObstacle: ((x: number, y: number, z: number) => boolean) | null = null;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -146,6 +150,11 @@ export function setupWalker(initial: WalkOptions): Walker {
     if (!options.ignoreSpecks) return true;
     const voxelsAcross = SPECK_SIZE / (grid.resolution * root.getWorldScale(probe).x);
     return !grid.isSpeck(local.x, local.y, local.z, Math.max(8, Math.round(voxelsAcross ** 3)));
+  }
+
+  /** Something the body bumps into: the scan's voxels, or an invisible wall (not something to stand on). */
+  function bodyObstacle(x: number, y: number, z: number): boolean {
+    return obstacle(x, y, z) || (extraObstacle?.(x, y, z) ?? false);
   }
 
   /** Top of the highest solid voxel at (x, z) between `top` and `bottom` (world y), or null. */
@@ -181,7 +190,7 @@ export function setupWalker(initial: WalkOptions): Walker {
       const px = i < 0 ? x : x + Math.cos(a) * radius;
       const pz = i < 0 ? z : z + Math.sin(a) * radius;
       for (let h = ground + stepHeight + step / 2; h <= ground + head + clearance; h += step) {
-        if (!obstacle(px, h, pz)) continue;
+        if (!bodyObstacle(px, h, pz)) continue;
         head = h - ground - clearance;
         if (head < eyeHeight * MIN_CROUCH) {
           lastFailure = { reason: "body", point: new THREE.Vector3(px, h, pz), height: h - ground };
@@ -216,7 +225,7 @@ export function setupWalker(initial: WalkOptions): Walker {
     let nz = 0;
     for (let i = -NORMAL_REACH; i <= NORMAL_REACH; i++) {
       for (let k = -NORMAL_REACH; k <= NORMAL_REACH; k++) {
-        if ((i !== 0 || k !== 0) && obstacle(point.x + i * step, point.y, point.z + k * step)) {
+        if ((i !== 0 || k !== 0) && bodyObstacle(point.x + i * step, point.y, point.z + k * step)) {
           nx -= i;
           nz -= k;
         }
@@ -336,7 +345,7 @@ export function setupWalker(initial: WalkOptions): Walker {
       const px = i < 0 ? x : x + Math.cos(a) * options.radius;
       const pz = i < 0 ? z : z + Math.sin(a) * options.radius;
       for (let h = feet + step * AIR_FOOT_VOXELS; h <= top; h += step) {
-        if (obstacle(px, h, pz)) {
+        if (bodyObstacle(px, h, pz)) {
           lastFailure = { reason: "body", point: new THREE.Vector3(px, h, pz), height: h - feet };
           return false;
         }
@@ -424,7 +433,7 @@ export function setupWalker(initial: WalkOptions): Walker {
     for (let h = ground + stepHeight + step / 2; h <= ground + eyeHeight * MIN_CROUCH; h += step) {
       for (let i = -1; i < DIRECTIONS; i++) {
         const a = (i / DIRECTIONS) * Math.PI * 2;
-        if (obstacle(i < 0 ? x : x + Math.cos(a) * radius, h, i < 0 ? z : z + Math.sin(a) * radius)) count++;
+        if (bodyObstacle(i < 0 ? x : x + Math.cos(a) * radius, h, i < 0 ? z : z + Math.sin(a) * radius)) count++;
       }
     }
     return count;
@@ -451,6 +460,9 @@ export function setupWalker(initial: WalkOptions): Walker {
       if (enabled && air === null && options.jumpHeight > 0) jumpRequested = true;
     },
     inAir: () => air !== null,
+    setBodyObstacle(test) {
+      extraObstacle = test;
+    },
     grid: () => grid,
     blocked: () => block,
     groundAt(position, from = position.y) {
