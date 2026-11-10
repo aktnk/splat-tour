@@ -58,6 +58,13 @@ export interface Walker {
   /** Why the last move stopped, or null if it did not. */
   blocked(): WalkBlock | null;
   isEnabled(): boolean;
+  /**
+   * Keeps the eye where a view just put it (a viewpoint, an arrival, the
+   * first view) instead of easing it to the walking height, until the camera
+   * moves sideways or jumps; turning around keeps it. Changing the options or
+   * switching walking on or off lets go of it.
+   */
+  hold(): void;
   /** Jumps at the next constrain(), if walking on the ground and jumping is allowed. */
   jump(): void;
   /** Whether the body is in the air (a jump or a drop). */
@@ -128,6 +135,8 @@ export function setupWalker(initial: WalkOptions): Walker {
   let stuckDepth: number | null = null;
   let air: Air | null = null;
   let jumpRequested = false;
+  // The eye stays where a view put it until the walker moves (hold()).
+  let held = false;
   let extraObstacle: ((x: number, y: number, z: number) => boolean) | null = null;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
@@ -449,9 +458,16 @@ export function setupWalker(initial: WalkOptions): Walker {
     },
     setOptions(o) {
       options = o;
+      held = false;
     },
     setEnabled(on) {
       enabled = on && grid !== null;
+      feet = null;
+      air = null;
+      held = false;
+    },
+    hold() {
+      held = true;
       feet = null;
       air = null;
     },
@@ -471,6 +487,12 @@ export function setupWalker(initial: WalkOptions): Walker {
     },
     constrain(camera, previous, dt) {
       if (!enabled || !grid || !root) return false;
+      if (held) {
+        const sideways = Math.hypot(camera.position.x - previous.x, camera.position.z - previous.z) > 1e-9;
+        // Standing (or only turning) at the view: the eye stays where it was put.
+        if (!sideways && !jumpRequested) return false;
+        held = false;
+      }
       // Where the feet are: the ground last stood on, unless the camera was
       // moved some other way (a glide, a jump to a view); then the first ground below the eye.
       const kept = (feet !== null || air !== null) && previous.distanceToSquared(placed) < 1e-8;

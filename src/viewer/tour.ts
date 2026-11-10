@@ -17,7 +17,7 @@ import {
 import { setupScene } from "./scene";
 import { setupJoystick, setupSparkControls } from "./controls";
 import { defaultFrameLoopOptions, setupFrameLoop } from "./frame-loop";
-import { setupSplatView } from "./splat-view";
+import { sceneMatrix, setupSplatView } from "./splat-view";
 import { setupEntranceMarkers } from "./entrance-markers";
 import { setupEntranceTooltip } from "./entrance-tooltip";
 import { setupEntranceInteraction } from "./entrance-interaction";
@@ -55,6 +55,8 @@ const DEBUG_UPDATE_MS = 500;
 const GLIDE_MIN_MS = 700;
 const GLIDE_MAX_MS = 1800;
 const GLIDE_MS_PER_UNIT = 250;
+/** From the table of contents, the camera stops this far in front of an icon (world units), near enough for the medal. */
+const APPROACH_DISTANCE = 1.8;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -425,6 +427,8 @@ export async function startTour({
       walkBase = { ...settings, ignoreSpecks: true };
       applyEyeLevel();
       walker.setEnabled(settings.start === "walk");
+      // The view the scene opened at keeps its height until the visitor moves.
+      walker.hold();
       moveMode.setMode(settings.start);
       moveMode.setAvailable(true);
       updateWalkControls();
@@ -441,6 +445,7 @@ export async function startTour({
     interaction.reset();
     glide = null;
     splatView.applyView(entryView);
+    walker.hold();
     loop.invalidate();
   }
 
@@ -522,9 +527,20 @@ export async function startTour({
     const scene = manifest.scenes.find((s) => s.entrances.includes(entrance));
     if (!scene || scene.id === current.id) {
       await activate(entrance);
-    } else {
-      await openFromSidebar(scene.id, entrance);
+      return;
     }
+    if (busy) {
+      return;
+    }
+    back();
+    if (entrance.target.type === "view") {
+      await openFromSidebar(scene.id, entrance);
+      return;
+    }
+    // A model or web page is opened from the scene it is in, so "戻る"
+    // returns there; a scene target is entered directly at its arrival view.
+    if (entrance.target.type !== "scene") await loadScene(scene.id, scene.initialView);
+    await activate(entrance);
   }
 
   // From the sidebar: a scene opens at its first view.
@@ -541,30 +557,66 @@ export async function startTour({
     interaction.reset();
     entryView = scene.initialView;
     splatView.applyView(scene.initialView);
+    walker.hold();
     loop.invalidate();
   }
 
-  // From the sidebar: an entrance does what clicking its icon does. A model or
-  // web page is opened from the scene the entrance is in, so "戻る" returns
-  // there; a scene target is entered directly at its arrival view.
+  // A view in front of an entrance's icon, facing it: from the side visitors
+  // come from (its wall's direction, else from where the camera is, or from
+  // the scene's first view in another scene), at the icon's height.
+  function approachView(scene: Scene, entrance: Entrance): View {
+    const matrix = scene.id === current.id ? splatView.root.matrixWorld : sceneMatrix(scene);
+    const icon = new THREE.Vector3(...entrance.position).applyMatrix4(matrix);
+    let dx: number;
+    let dz: number;
+    if (entrance.barrier && entrance.barrier.yaw !== undefined) {
+      // A camera with this yaw looks along (-sin, -cos).
+      dx = -Math.sin((entrance.barrier.yaw * Math.PI) / 180);
+      dz = -Math.cos((entrance.barrier.yaw * Math.PI) / 180);
+    } else {
+      const from =
+        scene.id === current.id ? camera.position : new THREE.Vector3(...scene.initialView.position).applyMatrix4(matrix);
+      dx = icon.x - from.x;
+      dz = icon.z - from.z;
+      if (Math.hypot(dx, dz) < 1e-3) {
+        // Standing at the icon: keep facing the way the camera (or the first view) does.
+        const yaw =
+          scene.id === current.id
+            ? new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ").y
+            : (scene.initialView.yaw * Math.PI) / 180;
+        dx = -Math.sin(yaw);
+        dz = -Math.cos(yaw);
+      }
+    }
+    const length = Math.hypot(dx, dz);
+    dx /= length;
+    dz /= length;
+    const stand = new THREE.Vector3(icon.x - dx * APPROACH_DISTANCE, icon.y, icon.z - dz * APPROACH_DISTANCE);
+    return {
+      position: stand.applyMatrix4(matrix.clone().invert()).toArray() as Vec3,
+      yaw: (Math.atan2(-dx, -dz) * 180) / Math.PI,
+      pitch: 0,
+    };
+  }
+
+  // From the sidebar: a viewpoint is gone to; for any other entrance the
+  // camera goes in front of its icon (in its scene), where its popup and
+  // "開く" are, rather than opening it at once.
   async function openFromSidebar(sceneId: string, entrance: Entrance): Promise<void> {
     if (busy) {
       return;
     }
     back();
-    const { target } = entrance;
-    if (target.type === "view" && sceneId !== current.id) {
-      // Open the other scene right at the viewpoint; "初期位置" stays its first view.
-      const scene = findScene(manifest, sceneId);
-      await loadScene(scene.id, target.view);
+    const scene = findScene(manifest, sceneId);
+    const view = entrance.target.type === "view" ? entrance.target.view : approachView(scene, entrance);
+    if (sceneId !== current.id) {
+      // Open the other scene right there; "初期位置" stays its first view.
+      await loadScene(scene.id, view);
       entryView = scene.initialView;
       return;
     }
-    if (target.type !== "scene" && sceneId !== current.id) {
-      const scene = findScene(manifest, sceneId);
-      await loadScene(scene.id, scene.initialView);
-    }
-    await activate(entrance);
+    interaction.reset();
+    glideTo(view);
   }
 
   function tickScene(): boolean {
@@ -582,6 +634,8 @@ export async function startTour({
       camera.quaternion.slerpQuaternions(glide.fromQuaternion, glide.toQuaternion, eased);
       if (t >= 1) {
         glide = null;
+        // Walking, the eye stays at the viewpoint's height until the visitor moves.
+        walker.hold();
         // Spark's controls measure time since their last update.
         controls.sparkControls.lastTime = 0;
       }

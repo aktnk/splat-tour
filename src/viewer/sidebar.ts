@@ -2,8 +2,9 @@ import { entranceTargetLabel, type Entrance, type Manifest } from "../core/manif
 
 // Table of contents of the tour: a drawer on the left, opened with the "☰"
 // button, listing every scene with its entrances. Choosing a scene goes to its
-// first view; choosing an entrance does what clicking its icon would (the
-// tour decides how, see tour.ts). The drawer closes after a choice.
+// first view; choosing a viewpoint goes there, and any other entrance takes
+// the camera in front of its icon, where its popup opens it (the tour decides
+// how, see tour.ts). The drawer closes after a choice.
 
 export interface Sidebar {
   /** Highlights the scene being shown. */
