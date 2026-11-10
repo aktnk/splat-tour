@@ -31,6 +31,7 @@ import { setupWalker, type WalkOptions } from "./walk";
 import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
+import { setupSceneTransition } from "./scene-transition";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
 import { captureExtension, captureFrame } from "./capture";
@@ -49,7 +50,8 @@ const MAX_PITCH = (85 * Math.PI) / 180;
 const CHILD_EYE_HEIGHT = 1.1;
 const JUMP_HEIGHT = 0.5;
 // Hide the loading indicator even if the initial view shows no splats.
-const LOADING_TIMEOUT_MS = 8000;
+// The first chunk of a streamed splat can take a while on a slow network.
+const LOADING_TIMEOUT_MS = 30000;
 const DEBUG_UPDATE_MS = 500;
 // Gliding to a viewpoint ("view" entrances): duration grows with distance.
 const GLIDE_MIN_MS = 700;
@@ -101,6 +103,7 @@ export async function startTour({
   const assetUrl = (path: string) => resolveAssetUrl(manifest, absoluteManifestUrl, path);
 
   const { scene, camera, renderer, sparkRenderer } = setupScene(canvas);
+  const transition = setupSceneTransition(renderer.domElement);
   const controls = setupSparkControls(canvas);
   const joystick = setupJoystick(document.getElementById("joystick-zone") as HTMLElement);
   // Right stick on touch screens: turns the view while held.
@@ -357,6 +360,8 @@ export async function startTour({
 
   async function loadScene(sceneId: string, view: View): Promise<void> {
     busy = true;
+    // Keep the scene being left on screen until the next one draws something.
+    if (splatView.getMesh() && screen === "scene") transition.hold(() => renderer.render(scene, camera));
     try {
       current = findScene(manifest, sceneId);
       entryView = view;
@@ -396,6 +401,7 @@ export async function startTour({
       barriers.setScene(current, splatView.root);
       if (current.walk) void loadWalk(current);
     } catch (err) {
+      transition.reveal();
       status.showError(`「${current.title}」を読み込めません: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       busy = false;
@@ -677,6 +683,8 @@ export async function startTour({
     if (loadingShown && !loading && !busy) {
       status.setLoading(false);
       loadingShown = false;
+      // The next scene draws its first, coarse level: fade the last one out over it.
+      transition.reveal();
     }
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
