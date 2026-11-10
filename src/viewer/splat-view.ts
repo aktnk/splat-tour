@@ -26,6 +26,22 @@ export interface SplatView {
   toLocal(world: THREE.Vector3): Vec3;
 }
 
+/** The scene rotation in degrees (XYZ Euler), with 180 added per flip. */
+function sceneRotation(s: Scene): Vec3 {
+  const { rotation, flipX, flipY, flipZ } = s.transform;
+  return [rotation[0] + (flipX ? 180 : 0), rotation[1] + (flipY ? 180 : 0), rotation[2] + (flipZ ? 180 : 0)];
+}
+
+/** Scene-local to world for a scene, as SplatView.root carries it once the scene is loaded. */
+export function sceneMatrix(s: Scene): THREE.Matrix4 {
+  const [x, y, z] = sceneRotation(s);
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(x * DEG, y * DEG, z * DEG, "XYZ")),
+    new THREE.Vector3().setScalar(s.transform.scale),
+  );
+}
+
 export function setupSplatView(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
@@ -36,13 +52,8 @@ export function setupSplatView(
   let mesh: SplatMesh | null = null;
 
   function applyTransform(s: Scene): void {
-    const { rotation, flipX, flipY, flipZ, scale } = s.transform;
-    setRotation([
-      rotation[0] + (flipX ? 180 : 0),
-      rotation[1] + (flipY ? 180 : 0),
-      rotation[2] + (flipZ ? 180 : 0),
-    ]);
-    root.scale.setScalar(scale);
+    setRotation(sceneRotation(s));
+    root.scale.setScalar(s.transform.scale);
     root.updateMatrixWorld(true);
   }
 
