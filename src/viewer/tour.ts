@@ -32,6 +32,7 @@ import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
 import { setupSceneTransition } from "./scene-transition";
+import { setupPrefetch } from "./prefetch";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
 import { captureExtension, captureFrame } from "./capture";
@@ -59,6 +60,9 @@ const GLIDE_MAX_MS = 1800;
 const GLIDE_MS_PER_UNIT = 250;
 /** From the table of contents, the camera stops this far in front of an icon (world units), near enough for the medal. */
 const APPROACH_DISTANCE = 1.8;
+/** Within this distance of an entrance to another scene (world units), that scene starts loading ahead. */
+const PREFETCH_DISTANCE = 6;
+const PREFETCH_CHECK_MS = 500;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -242,7 +246,17 @@ export async function startTour({
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
 
+  const prefetch = setupPrefetch();
+  // Starts loading the scene an entrance leads to (its popup shows, or the visitor is near).
+  const prefetchTarget = (entrance: Entrance) => {
+    const { target } = entrance;
+    if (target.type !== "scene") return;
+    const next = manifest.scenes.find((s) => s.id === target.sceneId);
+    if (next && next !== current) prefetch.splat(assetUrl(next.splat.url));
+  };
+  let lastPrefetchCheck = 0;
   const media = (entrance: Entrance) => {
+    prefetchTarget(entrance);
     const thumbnail = entranceThumbnail(entrance);
     const { target } = entrance;
     // An external page is labelled with its site.
@@ -675,6 +689,14 @@ export async function startTour({
     lastQuaternion.copy(camera.quaternion);
     // Cheap for a handful of coins, and covers hover changes too.
     markers.update(camera);
+    if (!busy && performance.now() - lastPrefetchCheck > PREFETCH_CHECK_MS) {
+      lastPrefetchCheck = performance.now();
+      for (const e of current.entrances) {
+        if (e.target.type !== "scene") continue;
+        const at = splatView.root.localToWorld(new THREE.Vector3(...e.position));
+        if (at.distanceTo(camera.position) < PREFETCH_DISTANCE) prefetchTarget(e);
+      }
+    }
     if (moved) {
       interaction.updatePopupPosition();
     }
