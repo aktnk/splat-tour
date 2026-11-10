@@ -13,7 +13,10 @@ export interface SplatView {
   getMesh(): SplatMesh | null;
   /** Replaces the current splat; resolves once it is initialized. */
   load(scene: Scene, url: string): Promise<void>;
-  /** True until the loaded splat has produced visible splats. */
+  /**
+   * True until the loaded splat has produced visible splats; for a streamed
+   * (paged) splat, until its first chunk, the coarse levels, has arrived.
+   */
   isLoading(): boolean;
   /** True while streamed chunks are being fetched or uploaded. */
   isStreaming(): boolean;
@@ -85,7 +88,12 @@ export function setupSplatView(
       await next.initialized;
     },
     isLoading() {
-      return mesh !== null && (!mesh.isInitialized || sparkRenderer.activeSplats === 0);
+      if (mesh === null) return false;
+      if (!mesh.isInitialized || sparkRenderer.activeSplats === 0) return true;
+      const pager = sparkRenderer.pager;
+      // Streamed: the header alone draws nothing; chunk 0 holds the coarse levels.
+      if (mesh.paged && pager) return pager.splatsChunkToPage.get(mesh.paged)?.[0] == null;
+      return false;
     },
     isStreaming() {
       const pager = sparkRenderer.pager;

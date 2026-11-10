@@ -31,6 +31,8 @@ import { setupWalker, type WalkOptions } from "./walk";
 import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
+import { setupSceneTransition } from "./scene-transition";
+import { setupPrefetch } from "./prefetch";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
 import { captureExtension, captureFrame } from "./capture";
@@ -49,7 +51,8 @@ const MAX_PITCH = (85 * Math.PI) / 180;
 const CHILD_EYE_HEIGHT = 1.1;
 const JUMP_HEIGHT = 0.5;
 // Hide the loading indicator even if the initial view shows no splats.
-const LOADING_TIMEOUT_MS = 8000;
+// The first chunk of a streamed splat can take a while on a slow network.
+const LOADING_TIMEOUT_MS = 30000;
 const DEBUG_UPDATE_MS = 500;
 // Gliding to a viewpoint ("view" entrances): duration grows with distance.
 const GLIDE_MIN_MS = 700;
@@ -57,6 +60,9 @@ const GLIDE_MAX_MS = 1800;
 const GLIDE_MS_PER_UNIT = 250;
 /** From the table of contents, the camera stops this far in front of an icon (world units), near enough for the medal. */
 const APPROACH_DISTANCE = 1.8;
+/** Within this distance of an entrance to another scene (world units), that scene starts loading ahead. */
+const PREFETCH_DISTANCE = 6;
+const PREFETCH_CHECK_MS = 500;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -101,6 +107,7 @@ export async function startTour({
   const assetUrl = (path: string) => resolveAssetUrl(manifest, absoluteManifestUrl, path);
 
   const { scene, camera, renderer, sparkRenderer } = setupScene(canvas);
+  const transition = setupSceneTransition(renderer.domElement);
   const controls = setupSparkControls(canvas);
   const joystick = setupJoystick(document.getElementById("joystick-zone") as HTMLElement);
   // Right stick on touch screens: turns the view while held.
@@ -239,7 +246,17 @@ export async function startTour({
   const lastPosition = new THREE.Vector3(Infinity, 0, 0);
   const lastQuaternion = new THREE.Quaternion();
 
+  const prefetch = setupPrefetch();
+  // Starts loading the scene an entrance leads to (its popup shows, or the visitor is near).
+  const prefetchTarget = (entrance: Entrance) => {
+    const { target } = entrance;
+    if (target.type !== "scene") return;
+    const next = manifest.scenes.find((s) => s.id === target.sceneId);
+    if (next && next !== current) prefetch.splat(assetUrl(next.splat.url));
+  };
+  let lastPrefetchCheck = 0;
   const media = (entrance: Entrance) => {
+    prefetchTarget(entrance);
     const thumbnail = entranceThumbnail(entrance);
     const { target } = entrance;
     // An external page is labelled with its site.
@@ -357,6 +374,8 @@ export async function startTour({
 
   async function loadScene(sceneId: string, view: View): Promise<void> {
     busy = true;
+    // Keep the scene being left on screen until the next one draws something.
+    if (splatView.getMesh() && screen === "scene") transition.hold(() => renderer.render(scene, camera));
     try {
       current = findScene(manifest, sceneId);
       entryView = view;
@@ -396,6 +415,7 @@ export async function startTour({
       barriers.setScene(current, splatView.root);
       if (current.walk) void loadWalk(current);
     } catch (err) {
+      transition.reveal();
       status.showError(`「${current.title}」を読み込めません: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       busy = false;
@@ -669,6 +689,14 @@ export async function startTour({
     lastQuaternion.copy(camera.quaternion);
     // Cheap for a handful of coins, and covers hover changes too.
     markers.update(camera);
+    if (!busy && performance.now() - lastPrefetchCheck > PREFETCH_CHECK_MS) {
+      lastPrefetchCheck = performance.now();
+      for (const e of current.entrances) {
+        if (e.target.type !== "scene") continue;
+        const at = splatView.root.localToWorld(new THREE.Vector3(...e.position));
+        if (at.distanceTo(camera.position) < PREFETCH_DISTANCE) prefetchTarget(e);
+      }
+    }
     if (moved) {
       interaction.updatePopupPosition();
     }
@@ -677,6 +705,8 @@ export async function startTour({
     if (loadingShown && !loading && !busy) {
       status.setLoading(false);
       loadingShown = false;
+      // The next scene draws its first, coarse level: fade the last one out over it.
+      transition.reveal();
     }
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
