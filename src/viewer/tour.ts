@@ -677,7 +677,9 @@ export async function startTour({
   }
 
   /** Where clicking at a screen point goes: a floor spot to walk to, or a surface to fly towards. */
-  function clickTarget(ndc: THREE.Vector2): { point: THREE.Vector3; walk: boolean } | null {
+  function clickTarget(
+    ndc: THREE.Vector2,
+  ): { point: THREE.Vector3; walk: boolean; mark: THREE.Vector3; markNormal?: THREE.Vector3 } | null {
     raycaster.setFromCamera(ndc, camera);
     const { origin, direction } = raycaster.ray;
     if (walker.isEnabled()) {
@@ -688,12 +690,20 @@ export async function startTour({
       const ground = walker.groundAt(from);
       if (ground === null) return null;
       // As far as walking straight there gets: before a wall (scanned or invisible) on the way.
-      return { point: walker.clearPath(camera.position, new THREE.Vector3(from.x, ground, from.z)), walk: true };
+      const path = walker.clearPath(camera.position, new THREE.Vector3(from.x, ground, from.z));
+      if (!path.wall) return { point: path.stand, walk: true, mark: path.stand };
+      // The ring goes on that wall, where the line of sight meets it (within the part that was met).
+      const { wall } = path;
+      const across = Math.hypot(direction.x, direction.z);
+      const reach = Math.hypot(wall.x - origin.x, wall.z - origin.z);
+      const sight = across > 1e-6 ? origin.y + (direction.y * reach) / across : wall.low;
+      const mark = new THREE.Vector3(wall.x, THREE.MathUtils.clamp(sight, wall.low, wall.high), wall.z);
+      return { point: path.stand, walk: true, mark, markNormal: wall.normal };
     }
     const mesh = splatView.getMesh();
     if (!mesh) return null;
     const hit = raycaster.intersectObject(mesh, false)[0];
-    return hit && hit.distance <= CLICK_MOVE_MAX ? { point: hit.point.clone(), walk: false } : null;
+    return hit && hit.distance <= CLICK_MOVE_MAX ? { point: hit.point.clone(), walk: false, mark: hit.point.clone() } : null;
   }
 
   function stopClickMove(): void {
@@ -712,7 +722,7 @@ export async function startTour({
     const horizontal = Math.hypot(dx, dz);
     if (target.walk) {
       if (horizontal < CLICK_ARRIVE * 2) return;
-      floorCursor.set(target.point);
+      floorCursor.set(target.mark, target.markNormal);
       autoWalk = {
         target: target.point,
         turnFrom: camera.quaternion.clone(),
@@ -745,7 +755,7 @@ export async function startTour({
     const over = lastMouse !== null && screen === "scene" && !busy && walker.isEnabled() && !autoWalk;
     // Over an entrance's icon, a click opens it instead (the interaction sets the pointer cursor).
     const target = over && canvas.style.cursor !== "pointer" ? clickTarget(lastMouse as THREE.Vector2) : null;
-    if (!autoWalk) floorCursor.set(target?.point ?? null);
+    if (!autoWalk) floorCursor.set(target?.mark ?? null, target?.markNormal);
     loop.invalidate();
   }
   function queueHover(): void {
