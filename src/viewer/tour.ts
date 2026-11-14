@@ -33,6 +33,7 @@ import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
 import { setupSceneTransition } from "./scene-transition";
 import { setupPrefetch } from "./prefetch";
+import { setupFloorCursor } from "./floor-cursor";
 import { levelingRotation } from "./floor-align";
 import { assertAssetAvailable } from "./asset-check";
 import { captureExtension, captureFrame } from "./capture";
@@ -63,6 +64,21 @@ const APPROACH_DISTANCE = 1.8;
 /** Within this distance of an entrance to another scene (world units), that scene starts loading ahead. */
 const PREFETCH_DISTANCE = 6;
 const PREFETCH_CHECK_MS = 500;
+/** Clicking a spot: the farthest it reaches (world units). */
+const CLICK_MOVE_MAX = 60;
+/** Walking to a clicked spot: it stands this far back from what the ray hit (world units), off a wall. */
+const CLICK_BACK_OFF = 0.3;
+/** Walking to a clicked spot: close enough (world units). */
+const CLICK_ARRIVE = 0.1;
+/** Walking to a clicked spot: the turn towards it at the start (ms). */
+const CLICK_TURN_MS = 400;
+/** Walking to a clicked spot: stopped by a wall for this long ends it (ms). */
+const CLICK_STUCK_MS = 300;
+/** Flying to a clicked spot: stop this far before it (world units). */
+const CLICK_FLY_STOP = 1.0;
+/** Mouse wheel: metres per pixel of scroll, and the fastest it is walked (times the move speed). */
+const WHEEL_M_PER_PX = 0.005;
+const WHEEL_SPEED_FACTOR = 2;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -212,6 +228,21 @@ export async function startTour({
   let voxelCenter: THREE.Vector3 | null = null;
   let lastTick = performance.now();
   const raycaster = new THREE.Raycaster();
+  // Clicking (tapping) a spot to go there: walking along the floor, or a
+  // glide when flying; the ring shows where a click would walk to.
+  const floorCursor = setupFloorCursor(scene);
+  let autoWalk: {
+    target: THREE.Vector3;
+    turnFrom: THREE.Quaternion;
+    turnTo: THREE.Quaternion;
+    start: number;
+    turned: boolean;
+    stuckSince: number | null;
+  } | null = null;
+  // Mouse wheel: distance still to walk (or fly) forward (negative: back).
+  let pendingWheel = 0;
+  let lastMouse: THREE.Vector2 | null = null;
+  let hoverQueued = false;
 
   let screen: Screen = "scene";
   /** The screen shown; the 3DGS scene's own controls (sticks, jump, walk switches) hide on the others (style.css). */
@@ -282,9 +313,15 @@ export async function startTour({
     media,
     isEnabled: () => screen === "scene" && !busy,
     onActivate: (entrance) => void activate(entrance),
-    onEmptyClick: (ndc) => {
+    onEmptyClick: (ndc, event) => {
       const mesh = splatView.getMesh();
       if (!debug.enabled || !mesh) {
+        clickMove(ndc);
+        return;
+      }
+      // ?debug=1: a click reads the point; Shift+click goes there.
+      if (event.shiftKey && !alignPoints) {
+        clickMove(ndc);
         return;
       }
       raycaster.setFromCamera(ndc, camera);
@@ -639,6 +676,111 @@ export async function startTour({
     glideTo(view);
   }
 
+  /** Where clicking at a screen point goes: a floor spot to walk to, or a surface to fly towards. */
+  function clickTarget(ndc: THREE.Vector2): { point: THREE.Vector3; walk: boolean } | null {
+    raycaster.setFromCamera(ndc, camera);
+    const { origin, direction } = raycaster.ray;
+    if (walker.isEnabled()) {
+      const hit = walker.raycast(origin, direction, CLICK_MOVE_MAX);
+      if (!hit) return null;
+      // A little back along the ray, so a wall's spot is the floor in front of it.
+      const from = hit.clone().addScaledVector(direction, -CLICK_BACK_OFF);
+      const ground = walker.groundAt(from);
+      return ground === null ? null : { point: new THREE.Vector3(from.x, ground, from.z), walk: true };
+    }
+    const mesh = splatView.getMesh();
+    if (!mesh) return null;
+    const hit = raycaster.intersectObject(mesh, false)[0];
+    return hit && hit.distance <= CLICK_MOVE_MAX ? { point: hit.point.clone(), walk: false } : null;
+  }
+
+  function stopClickMove(): void {
+    autoWalk = null;
+    pendingWheel = 0;
+  }
+
+  // Goes to a clicked spot: walks there facing the way it goes, or flies there.
+  function clickMove(ndc: THREE.Vector2): void {
+    if (screen !== "scene" || busy || glide) return;
+    const target = clickTarget(ndc);
+    if (!target) return;
+    stopClickMove();
+    const dx = target.point.x - camera.position.x;
+    const dz = target.point.z - camera.position.z;
+    const horizontal = Math.hypot(dx, dz);
+    if (target.walk) {
+      if (horizontal < CLICK_ARRIVE * 2) return;
+      floorCursor.set(target.point);
+      autoWalk = {
+        target: target.point,
+        turnFrom: camera.quaternion.clone(),
+        // Facing the way it walks, looking ahead.
+        turnTo: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.atan2(-dx, -dz), 0, "YXZ")),
+        start: performance.now(),
+        turned: false,
+        stuckSince: null,
+      };
+    } else {
+      const along = target.point.clone().sub(camera.position);
+      const length = along.length();
+      if (length <= CLICK_FLY_STOP + 0.1) return;
+      const end = camera.position.clone().addScaledVector(along, (length - CLICK_FLY_STOP) / length);
+      // Not through an invisible wall.
+      barriers.constrain(camera.position.clone(), end);
+      floorCursor.set(null);
+      glideTo({
+        position: splatView.toLocal(end),
+        yaw: (Math.atan2(-along.x, -along.z) * 180) / Math.PI,
+        pitch: (Math.atan2(along.y, horizontal) * 180) / Math.PI,
+      });
+    }
+    loop.invalidate();
+  }
+
+  // The ring under the mouse (walking only: the voxels are cheap to hit, the splat is not).
+  function updateHover(): void {
+    hoverQueued = false;
+    const over = lastMouse !== null && screen === "scene" && !busy && walker.isEnabled() && !autoWalk;
+    // Over an entrance's icon, a click opens it instead (the interaction sets the pointer cursor).
+    const target = over && canvas.style.cursor !== "pointer" ? clickTarget(lastMouse as THREE.Vector2) : null;
+    if (!autoWalk) floorCursor.set(target?.point ?? null);
+    loop.invalidate();
+  }
+  function queueHover(): void {
+    if (hoverQueued) return;
+    hoverQueued = true;
+    requestAnimationFrame(updateHover);
+  }
+  canvas.addEventListener("pointermove", (event) => {
+    if (event.pointerType !== "mouse" || event.buttons !== 0) return;
+    const rect = canvas.getBoundingClientRect();
+    lastMouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    queueHover();
+  });
+  canvas.addEventListener("pointerleave", () => {
+    lastMouse = null;
+    queueHover();
+  });
+  canvas.addEventListener(
+    "wheel",
+    (event) => {
+      if (screen !== "scene" || busy || glide) return;
+      event.preventDefault();
+      autoWalk = null;
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 800 : 1);
+      pendingWheel -= pixels * WHEEL_M_PER_PX;
+      loop.invalidate();
+    },
+    { passive: false },
+  );
+  document.addEventListener("keydown", (event) => {
+    const { keycodeMoveMapping, keycodeRotateMapping } = controls.fpsMovement;
+    if (keycodeMoveMapping[event.code] || keycodeRotateMapping[event.code]) stopClickMove();
+  });
+
   function tickScene(): boolean {
     const now = performance.now();
     const dt = Math.min((now - lastTick) / 1000, 0.1);
@@ -672,6 +814,35 @@ export async function startTour({
         lookEuler.z = 0;
         camera.quaternion.setFromEuler(lookEuler);
       }
+      if (move.x !== 0 || move.y !== 0) stopClickMove();
+      const walkSpeed = controls.fpsMovement.moveSpeed;
+      let clickStep = 0;
+      if (autoWalk) {
+        // Turns to face the way it goes; afterwards looking around is free.
+        if (!autoWalk.turned) {
+          const t = Math.min((now - autoWalk.start) / CLICK_TURN_MS, 1);
+          camera.quaternion.slerpQuaternions(autoWalk.turnFrom, autoWalk.turnTo, 1 - (1 - t) * (1 - t));
+          autoWalk.turned = t >= 1;
+        }
+        const dx = autoWalk.target.x - camera.position.x;
+        const dz = autoWalk.target.z - camera.position.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance < CLICK_ARRIVE) {
+          autoWalk = null;
+          floorCursor.set(null);
+        } else {
+          clickStep = Math.min(distance, walkSpeed * dt);
+          camera.position.x += (dx / distance) * clickStep;
+          camera.position.z += (dz / distance) * clickStep;
+        }
+      }
+      if (pendingWheel !== 0) {
+        const step = Math.sign(pendingWheel) * Math.min(Math.abs(pendingWheel), walkSpeed * WHEEL_SPEED_FACTOR * dt);
+        const forward = camera.getWorldDirection(new THREE.Vector3());
+        if (walker.isEnabled()) forward.setY(0).normalize();
+        camera.position.addScaledVector(forward, step);
+        pendingWheel -= step;
+      }
       controls.fpsMovement.extraMove.set(move.x * speed, 0, -move.y * speed);
       controls.update(camera);
       splatView.clampCamera(current.bounds);
@@ -679,6 +850,18 @@ export async function startTour({
       if (!walker.isEnabled()) barriers.constrain(previous, camera.position);
       settling = walker.constrain(camera, previous, dt);
       if (walker.isEnabled() && walker.blocked() !== shownBlock) showBlock(walker.blocked());
+      if (autoWalk && clickStep > 0) {
+        // Stopped by a wall (no real progress for a moment): give up there.
+        const progressed = Math.hypot(camera.position.x - previous.x, camera.position.z - previous.z) > clickStep * 0.3;
+        if (progressed) autoWalk.stuckSince = null;
+        else if (autoWalk.stuckSince === null) autoWalk.stuckSince = now;
+        else if (now - autoWalk.stuckSince > CLICK_STUCK_MS) {
+          autoWalk = null;
+          floorCursor.set(null);
+        }
+      }
+      // A wheel step that went nowhere (a wall) is not kept for later.
+      if (pendingWheel !== 0 && camera.position.distanceToSquared(previous) < 1e-10) pendingWheel = 0;
     }
     if (showVoxels) updateVoxelOverlay();
 
@@ -710,7 +893,8 @@ export async function startTour({
     }
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
-    return moved || settling || busy || loading || splatView.isStreaming();
+    if (moved && lastMouse && !autoWalk) queueHover();
+    return moved || settling || busy || loading || splatView.isStreaming() || autoWalk !== null || pendingWheel !== 0;
   }
 
   // ?debug=1: what stopped the last walking move (a red dot), to tell a real

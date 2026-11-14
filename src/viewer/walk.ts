@@ -73,6 +73,8 @@ export interface Walker {
   setBodyObstacle(test: ((x: number, y: number, z: number) => boolean) | null): void;
   /** Ground height under a world point, or null (no grid, or no ground near). */
   groundAt(position: THREE.Vector3, from?: number): number | null;
+  /** The first voxel a world ray meets within `maxDistance` (world units), as a world point, or null. */
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): THREE.Vector3 | null;
   /**
    * Applies walking to a camera that the controls moved from `previous`.
    * Returns true while the camera is still easing to its height.
@@ -481,6 +483,16 @@ export function setupWalker(initial: WalkOptions): Walker {
     },
     grid: () => grid,
     blocked: () => block,
+    raycast(origin, direction, maxDistance) {
+      if (!grid || !root) return null;
+      const step = worldStep() / 2;
+      const p = new THREE.Vector3();
+      for (let t = step; t <= maxDistance; t += step) {
+        p.copy(origin).addScaledVector(direction, t);
+        if (obstacle(p.x, p.y, p.z)) return p;
+      }
+      return null;
+    },
     groundAt(position, from = position.y) {
       if (!grid || !root) return null;
       return surface(position.x, position.z, from, from - options.eyeHeight * LANDING_SEARCH);

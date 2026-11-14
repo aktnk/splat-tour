@@ -20,8 +20,8 @@ export interface EntranceInteractionOptions {
   media(entrance: Entrance): TooltipMedia;
   isEnabled(): boolean;
   onActivate(entrance: Entrance): void;
-  /** Click or tap that hit no entrance. */
-  onEmptyClick?(ndc: THREE.Vector2): void;
+  /** Click or tap that hit no entrance (not a tap that only closed a popup). */
+  onEmptyClick?(ndc: THREE.Vector2, event: PointerEvent): void;
   /** Something visible changed (hover highlight, popup). */
   onChange(): void;
 }
@@ -129,10 +129,12 @@ export function setupEntranceInteraction(options: EntranceInteractionOptions): E
     const ndc = ndcOf(event);
     const hit = markers.pick(ndc, camera, options.occluder());
     if (!hit) {
+      // On touch, tapping beside an open popup only closes it.
+      const closing = event.pointerType !== "mouse" && tooltip.current() !== null;
       if (event.pointerType !== "mouse") {
         reset();
       }
-      options.onEmptyClick?.(ndc);
+      if (!closing) options.onEmptyClick?.(ndc, event);
       return;
     }
     if (event.pointerType === "mouse" || tooltip.current()?.id === hit.id) {
