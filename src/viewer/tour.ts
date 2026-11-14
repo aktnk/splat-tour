@@ -76,9 +76,14 @@ const CLICK_TURN_MS = 400;
 const CLICK_STUCK_MS = 300;
 /** Flying to a clicked spot: stop this far before it (world units). */
 const CLICK_FLY_STOP = 1.0;
-/** Mouse wheel: metres per pixel of scroll, and the fastest it is walked (times the move speed). */
+/** Mouse wheel: metres per pixel of scroll (a notch is about 100 px: 0.5 m). */
 const WHEEL_M_PER_PX = 0.005;
-const WHEEL_SPEED_FACTOR = 2;
+/** Mouse wheel: the most distance it queues (world units), so a fast spin does not run on. */
+const WHEEL_MAX_QUEUE = 1.5;
+/** Mouse wheel: the queued distance shrinks like this per second (exponential, like smooth scrolling). */
+const WHEEL_EASE_RATE = 15;
+/** Mouse wheel: below this the rest is walked in one go (world units). */
+const WHEEL_SNAP = 0.005;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -791,7 +796,7 @@ export async function startTour({
       event.preventDefault();
       autoWalk = null;
       const pixels = event.deltaY * (event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 800 : 1);
-      pendingWheel -= pixels * WHEEL_M_PER_PX;
+      pendingWheel = THREE.MathUtils.clamp(pendingWheel - pixels * WHEEL_M_PER_PX, -WHEEL_MAX_QUEUE, WHEEL_MAX_QUEUE);
       loop.invalidate();
     },
     { passive: false },
@@ -859,7 +864,9 @@ export async function startTour({
         }
       }
       if (pendingWheel !== 0) {
-        const step = Math.sign(pendingWheel) * Math.min(Math.abs(pendingWheel), walkSpeed * WHEEL_SPEED_FACTOR * dt);
+        // Fast at first, then easing out: stops about 0.3 s after the wheel does, whatever the scene's speed.
+        const step =
+          Math.abs(pendingWheel) < WHEEL_SNAP ? pendingWheel : pendingWheel * (1 - Math.exp(-WHEEL_EASE_RATE * dt));
         const forward = camera.getWorldDirection(new THREE.Vector3());
         if (walker.isEnabled()) forward.setY(0).normalize();
         camera.position.addScaledVector(forward, step);
