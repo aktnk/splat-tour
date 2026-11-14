@@ -76,6 +76,14 @@ export interface Walker {
   /** The first voxel a world ray meets within `maxDistance` (world units), as a world point, or null. */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): THREE.Vector3 | null;
   /**
+   * Walking straight from `from` (the eye) to `to` (a floor point, world):
+   * the floor in front of the first thing the body would meet on the way (a
+   * scanned wall, an invisible wall, furniture), a body's radius before it;
+   * `to` if the way is clear. Cheap enough for following the mouse: it looks
+   * along two lines at knee and chest height, not at every step's footing.
+   */
+  clearPath(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3;
+  /**
    * Applies walking to a camera that the controls moved from `previous`.
    * Returns true while the camera is still easing to its height.
    */
@@ -492,6 +500,29 @@ export function setupWalker(initial: WalkOptions): Walker {
         if (obstacle(p.x, p.y, p.z)) return p;
       }
       return null;
+    },
+    clearPath(from, to) {
+      if (!grid || !root) return to.clone();
+      const start = walker.groundAt(from) ?? from.y - options.eyeHeight;
+      const dx = to.x - from.x;
+      const dz = to.z - from.z;
+      const length = Math.hypot(dx, dz);
+      const step = worldStep() / 2;
+      if (length < step) return to.clone();
+      // Above the steps (knee) and below the head (chest), over the slope from here to there.
+      const knee = options.stepHeight + worldStep();
+      const chest = Math.max(knee, options.eyeHeight * 0.8);
+      for (let t = step; t <= length; t += step) {
+        const x = from.x + (dx / length) * t;
+        const z = from.z + (dz / length) * t;
+        const floor = start + ((to.y - start) * t) / length;
+        if (!bodyObstacle(x, floor + knee, z) && !bodyObstacle(x, floor + chest, z)) continue;
+        const back = Math.max(0, t - options.radius - step);
+        const at = new THREE.Vector3(from.x + (dx / length) * back, 0, from.z + (dz / length) * back);
+        at.y = walker.groundAt(at, floor + options.eyeHeight / 2) ?? floor;
+        return at;
+      }
+      return to.clone();
     },
     groundAt(position, from = position.y) {
       if (!grid || !root) return null;

@@ -686,7 +686,9 @@ export async function startTour({
       // A little back along the ray, so a wall's spot is the floor in front of it.
       const from = hit.clone().addScaledVector(direction, -CLICK_BACK_OFF);
       const ground = walker.groundAt(from);
-      return ground === null ? null : { point: new THREE.Vector3(from.x, ground, from.z), walk: true };
+      if (ground === null) return null;
+      // As far as walking straight there gets: before a wall (scanned or invisible) on the way.
+      return { point: walker.clearPath(camera.position, new THREE.Vector3(from.x, ground, from.z)), walk: true };
     }
     const mesh = splatView.getMesh();
     if (!mesh) return null;
@@ -816,6 +818,8 @@ export async function startTour({
       }
       if (move.x !== 0 || move.y !== 0) stopClickMove();
       const walkSpeed = controls.fpsMovement.moveSpeed;
+      // Walking to a clicked spot goes as fast as walking with Shift held.
+      const clickSpeed = walkSpeed * controls.fpsMovement.shiftMultiplier;
       let clickStep = 0;
       if (autoWalk) {
         // Turns to face the way it goes; afterwards looking around is free.
@@ -831,7 +835,7 @@ export async function startTour({
           autoWalk = null;
           floorCursor.set(null);
         } else {
-          clickStep = Math.min(distance, walkSpeed * dt);
+          clickStep = Math.min(distance, clickSpeed * dt);
           camera.position.x += (dx / distance) * clickStep;
           camera.position.z += (dz / distance) * clickStep;
         }
