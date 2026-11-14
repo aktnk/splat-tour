@@ -95,6 +95,10 @@ export interface Walker {
    * not at every step's footing.
    */
   clearPath(from: THREE.Vector3, to: THREE.Vector3): ClearPath;
+  /** Horizontal direction out of a wall at a world point (from the voxels or walls around it), or null. */
+  wallNormal(point: THREE.Vector3): THREE.Vector3 | null;
+  /** The body's step height (world units): what rises more than this above the floor is a wall to it. */
+  stepHeight(): number;
   /**
    * Applies walking to a camera that the controls moved from `previous`.
    * Returns true while the camera is still easing to its height.
@@ -553,6 +557,13 @@ export function setupWalker(initial: WalkOptions): Walker {
       }
       return clear;
     },
+    wallNormal(point) {
+      if (!grid || !root) return null;
+      const [nx, nz] = surfaceNormal(point);
+      const n = Math.hypot(nx, nz);
+      return n > 1e-9 ? new THREE.Vector3(nx / n, 0, nz / n) : null;
+    },
+    stepHeight: () => options.stepHeight,
     groundAt(position, from = position.y) {
       if (!grid || !root) return null;
       return surface(position.x, position.z, from, from - options.eyeHeight * LANDING_SEARCH);

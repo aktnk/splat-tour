@@ -14,7 +14,7 @@ export interface FloorCursor {
   visible(): boolean;
 }
 
-const RADIUS = 0.25;
+const RADIUS = 0.18;
 
 export function setupFloorCursor(scene: THREE.Scene): FloorCursor {
   const ring = new THREE.Mesh(

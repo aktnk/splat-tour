@@ -691,7 +691,15 @@ export async function startTour({
       if (ground === null) return null;
       // As far as walking straight there gets: before a wall (scanned or invisible) on the way.
       const path = walker.clearPath(camera.position, new THREE.Vector3(from.x, ground, from.z));
-      if (!path.wall) return { point: path.stand, walk: true, mark: path.stand };
+      if (!path.wall) {
+        // The line of sight met a wall itself (higher than a step above the floor): the ring goes on it.
+        if (hit.y - ground > walker.stepHeight()) {
+          const normal =
+            walker.wallNormal(hit) ?? new THREE.Vector3(-direction.x, 0, -direction.z).normalize();
+          return { point: path.stand, walk: true, mark: hit.clone(), markNormal: normal };
+        }
+        return { point: path.stand, walk: true, mark: path.stand };
+      }
       // The ring goes on that wall, where the line of sight meets it (within the part that was met).
       const { wall } = path;
       const across = Math.hypot(direction.x, direction.z);
