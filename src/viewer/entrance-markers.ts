@@ -36,7 +36,7 @@ const NEAR_HIDE = 0.25;
 
 type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";
 
-// Look: far away a coin is a small glowing gold pearl, the same for every kind
+// Look: far away a coin is a small glowing deep blue pearl, the same for every kind
 // (the medal names the kind once near, so the pearl only says "here"); within
 // DOT_NEAR (or hovered) it becomes a medal: calm enamel in a gold bezel,
 // lit by a room environment (as the model screen) so it does not look
@@ -53,8 +53,11 @@ const CALM_COLOR: Record<IconKind, string> = {
   view: "#1e7a73",
 };
 const GOLD = "#c9a24c";
-/** The far-away pearl of every kind: a little lighter than the bezel's gold, as it glows. */
-const PEARL_COLOR = "#d8b45e";
+/**
+ * The far-away pearl of every kind: a glowing deep blue, calm against the
+ * photographic scene (a bright gold one read as an eclipse from afar).
+ */
+const PEARL_COLOR = "#2a5bd0";
 /** Medals are this much smaller than plain coins. */
 const LIT_SIZE = 0.85;
 /** World distance under which the pearl becomes a medal, and the pearl's size relative to a coin. */
@@ -270,7 +273,8 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
       metalness: 0.2,
       roughness: 0.25,
       emissive: new THREE.Color(PEARL_COLOR),
-      emissiveIntensity: 0.6,
+      // Lit evenly by its own glow, so the middle is not darker than the halo.
+      emissiveIntensity: 1,
     });
     return dotMaterialShared;
   }
@@ -310,7 +314,7 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
           toneMapped: false,
         }),
       );
-      halo.scale.setScalar(2.6);
+      halo.scale.setScalar(2.0);
       dot.add(pearl, halo);
       dot.scale.setScalar(DOT_SIZE / LIT_SIZE);
       coin.add(dot);
