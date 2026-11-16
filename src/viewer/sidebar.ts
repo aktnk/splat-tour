@@ -1,7 +1,8 @@
 import { entranceTargetLabel, type Entrance, type Manifest } from "../core/manifest";
 
 // Table of contents of the tour: a drawer on the left, opened with the "☰"
-// button, listing every scene with its entrances. Choosing a scene goes to its
+// button, listing every scene with its viewpoints and its entrances (to
+// scenes, models, web pages) under two headings. Choosing a scene goes to its
 // first view; choosing a viewpoint goes there, and any other entrance takes
 // the camera in front of its icon, where its popup opens it (the tour decides
 // how, see tour.ts). The drawer closes after a choice.
@@ -68,45 +69,58 @@ export function setupSidebar(manifest: Manifest, handlers: SidebarHandlers): Sid
       handlers.onScene(scene.id);
     });
 
+    // Viewpoints first, then the icons (entrances, exits, models, web pages),
+    // each under its own small heading; within a group, the manifest's order.
+    const groups: Array<[string, typeof scene.entrances]> = [
+      ["見どころ", scene.entrances.filter((e) => e.target.type === "view")],
+      ["入口・3D・Web", scene.entrances.filter((e) => e.target.type !== "view")],
+    ];
     const entranceList = document.createElement("ul");
-    for (const entrance of scene.entrances) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "sidebar-entrance";
-      const badge = document.createElement("span");
-      badge.className = `sidebar-badge ${badgeClass(entrance)}`;
-      const title = document.createElement("span");
-      title.className = "sidebar-entrance-title";
-      title.textContent = entrance.title;
-      const target = document.createElement("span");
-      target.className = "sidebar-entrance-target";
-      // A viewpoint leads nowhere else; its title says enough.
-      target.textContent = entrance.target.type === "view" ? "" : entranceTargetLabel(manifest, entrance);
-      button.append(badge, title, target);
-      const describes = handlers.describes?.(entrance) ?? false;
-      let lastPointer = "mouse";
-      button.addEventListener("pointerdown", (event) => {
-        lastPointer = event.pointerType;
-      });
-      if (describes) {
-        button.addEventListener("pointerenter", (event) => {
-          if (event.pointerType === "mouse") handlers.onDescribe?.(entrance, button);
+    for (const [label, members] of groups) {
+      if (members.length === 0) continue;
+      const heading = document.createElement("li");
+      heading.className = "sidebar-group";
+      heading.textContent = label;
+      entranceList.append(heading);
+      for (const entrance of members) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "sidebar-entrance";
+        const badge = document.createElement("span");
+        badge.className = `sidebar-badge ${badgeClass(entrance)}`;
+        const title = document.createElement("span");
+        title.className = "sidebar-entrance-title";
+        title.textContent = entrance.title;
+        const target = document.createElement("span");
+        target.className = "sidebar-entrance-target";
+        // A viewpoint leads nowhere else; its title says enough.
+        target.textContent = entrance.target.type === "view" ? "" : entranceTargetLabel(manifest, entrance);
+        button.append(badge, title, target);
+        const describes = handlers.describes?.(entrance) ?? false;
+        let lastPointer = "mouse";
+        button.addEventListener("pointerdown", (event) => {
+          lastPointer = event.pointerType;
         });
-        button.addEventListener("pointerleave", (event) => {
-          if (event.pointerType === "mouse") handlers.onDescribeEnd?.();
-        });
-      }
-      button.addEventListener("click", () => {
-        if (describes && lastPointer !== "mouse" && !handlers.isDescribing?.(entrance)) {
-          handlers.onDescribe?.(entrance, button);
-          return;
+        if (describes) {
+          button.addEventListener("pointerenter", (event) => {
+            if (event.pointerType === "mouse") handlers.onDescribe?.(entrance, button);
+          });
+          button.addEventListener("pointerleave", (event) => {
+            if (event.pointerType === "mouse") handlers.onDescribeEnd?.();
+          });
         }
-        setOpen(false);
-        handlers.onEntrance(scene.id, entrance);
-      });
-      const li = document.createElement("li");
-      li.append(button);
-      entranceList.append(li);
+        button.addEventListener("click", () => {
+          if (describes && lastPointer !== "mouse" && !handlers.isDescribing?.(entrance)) {
+            handlers.onDescribe?.(entrance, button);
+            return;
+          }
+          setOpen(false);
+          handlers.onEntrance(scene.id, entrance);
+        });
+        const li = document.createElement("li");
+        li.append(button);
+        entranceList.append(li);
+      }
     }
 
     const item = document.createElement("li");

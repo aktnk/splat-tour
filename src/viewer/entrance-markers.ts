@@ -36,13 +36,14 @@ const NEAR_HIDE = 0.25;
 
 type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";
 
-// Look: far away a coin is a small glowing pearl in its kind's colour; within
+// Look: far away a coin is a small glowing gold pearl, the same for every kind
+// (the medal names the kind once near, so the pearl only says "here"); within
 // DOT_NEAR (or hovered) it becomes a medal: calm enamel in a gold bezel,
 // lit by a room environment (as the model screen) so it does not look
 // pasted onto the photographic scene. In scenes with walk voxels it casts a
 // soft shadow on the floor below. Without a renderer (no environment light)
 // the plain unlit coin is drawn instead.
-// Calmer colours for the medal and the pearl: the kind still shows, without the
+// Calmer colours for the medal: the kind still shows, without the
 // signal-bright look against a photographic scene.
 const CALM_COLOR: Record<IconKind, string> = {
   entrance: "#2d5b8c",
@@ -52,6 +53,8 @@ const CALM_COLOR: Record<IconKind, string> = {
   view: "#1e7a73",
 };
 const GOLD = "#c9a24c";
+/** The far-away pearl of every kind: a little lighter than the bezel's gold, as it glows. */
+const PEARL_COLOR = "#d8b45e";
 /** Medals are this much smaller than plain coins. */
 const LIT_SIZE = 0.85;
 /** World distance under which the pearl becomes a medal, and the pearl's size relative to a coin. */
@@ -221,7 +224,7 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
   const shadowGeometry = new THREE.PlaneGeometry(1, 1);
   shadowGeometry.rotateX(-Math.PI / 2);
   const materials = new Map<IconKind, CoinParts>();
-  const dotMaterials = new Map<IconKind, THREE.Material>();
+  let dotMaterialShared: THREE.Material | null = null;
   const raycaster = new THREE.Raycaster();
   const environment =
     lit && options.renderer
@@ -261,19 +264,15 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     return parts;
   }
 
-  function dotMaterialFor(kind: IconKind): THREE.Material {
-    let material = dotMaterials.get(kind);
-    if (!material) {
-      material = standard({
-        color: CALM_COLOR[kind],
-        metalness: 0.2,
-        roughness: 0.25,
-        emissive: new THREE.Color(CALM_COLOR[kind]),
-        emissiveIntensity: 0.6,
-      });
-      dotMaterials.set(kind, material);
-    }
-    return material;
+  function dotMaterial(): THREE.Material {
+    dotMaterialShared ??= standard({
+      color: PEARL_COLOR,
+      metalness: 0.2,
+      roughness: 0.25,
+      emissive: new THREE.Color(PEARL_COLOR),
+      emissiveIntensity: 0.6,
+    });
+    return dotMaterialShared;
   }
 
   function createCoin(entrance: Entrance): THREE.Group {
@@ -300,11 +299,11 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     coin.userData.body = body;
     if (haloTexture) {
       const dot = new THREE.Group();
-      const pearl = new THREE.Mesh(dotGeometry, dotMaterialFor(kind));
+      const pearl = new THREE.Mesh(dotGeometry, dotMaterial());
       const halo = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: haloTexture,
-          color: CALM_COLOR[kind],
+          color: PEARL_COLOR,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
           transparent: true,
