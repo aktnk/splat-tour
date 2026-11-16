@@ -84,6 +84,8 @@ const WHEEL_MAX_QUEUE = 1.5;
 const WHEEL_EASE_RATE = 15;
 /** Mouse wheel: below this the rest is walked in one go (world units). */
 const WHEEL_SNAP = 0.005;
+/** The far-away pearls wiggle for a moment this often (ms): a few frames, so a still view stays mostly asleep. */
+const WIGGLE_PERIOD_MS = 5000;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -933,7 +935,15 @@ export async function startTour({
     // activeSplats is not a change signal: the LoD varies it slightly on
     // every sort, which would keep a still view rendering forever.
     if (moved && lastMouse && !autoWalk) queueHover();
-    return moved || settling || busy || loading || splatView.isStreaming() || autoWalk !== null || pendingWheel !== 0;
+    return (
+      moved ||
+      settling ||
+      busy ||
+      loading ||
+      splatView.isStreaming() ||
+      autoWalk !== null ||
+      pendingWheel !== 0
+    );
   }
 
   // ?debug=1: what stopped the last walking move (a red dot), to tell a real
@@ -1004,6 +1014,14 @@ export async function startTour({
       controls.sparkControls.lastTime = 0;
     },
   });
+
+  // Every few seconds the far-away pearls wiggle for a moment, so a still
+  // view still points out its entrances (not while hidden or elsewhere).
+  window.setInterval(() => {
+    if (document.hidden || screen !== "scene" || busy || sidebar.isOpen()) return;
+    // Frames for the wiggle only, without the settle time after a camera move.
+    loop.animateFor(markers.wiggle() + 50);
+  }, WIGGLE_PERIOD_MS);
 
   document.addEventListener("keydown", (event) => {
     if (event.code === "Space" && !event.repeat) {

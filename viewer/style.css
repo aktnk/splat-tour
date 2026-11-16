@@ -596,3 +596,11 @@ body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #
   border: 1px solid #333;
   resize: none;
 }
+
+/* Group headings in a scene's list: "見どころ" and "入口・3D・Web". */
+#sidebar .sidebar-group {
+  padding: 6px 16px 2px 28px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}

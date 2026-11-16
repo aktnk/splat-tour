@@ -23,6 +23,11 @@ export function defaultFrameLoopOptions(): FrameLoopOptions {
 export interface FrameLoop {
   /** Keeps rendering for another settleMs, e.g. after a UI change. */
   invalidate(): void;
+  /**
+   * Renders for `ms` only (no settleMs after it), e.g. a short animation
+   * while the view is otherwise still.
+   */
+  animateFor(ms: number): void;
   /** Frames rendered in the last second (0 while idle). */
   getFps(): number;
   isSleeping(): boolean;
@@ -115,8 +120,20 @@ export function setupFrameLoop(
   });
   invalidate();
 
+  function animateFor(ms: number): void {
+    const until = performance.now() + ms;
+    renderUntil = Math.max(renderUntil, until);
+    awakeUntil = Math.max(awakeUntil, until);
+    if (sleeping) {
+      sleeping = false;
+      onWake?.();
+      requestAnimationFrame(frame);
+    }
+  }
+
   return {
     invalidate,
+    animateFor,
     getFps() {
       return renderTimes.length;
     },
