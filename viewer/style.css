@@ -400,6 +400,22 @@ button {
   z-index: 6;
 }
 
+/* "◯ クリックで移動：入 / 切", above "大人 / 子ども". */
+#click-move {
+  position: fixed;
+  right: 16px;
+  bottom: calc(156px + env(safe-area-inset-bottom));
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--panel-bg);
+  border-radius: 999px;
+  z-index: 6;
+}
+
+#click-move[aria-pressed="false"] {
+  color: #aab0bc;
+}
+
 #move-mode button,
 #eye-level button {
   padding: 8px 12px;
@@ -491,11 +507,14 @@ button {
   #eye-level {
     bottom: calc(264px + env(safe-area-inset-bottom));
   }
+  #click-move {
+    bottom: calc(308px + env(safe-area-inset-bottom));
+  }
 }
 
 /* A model or web page is shown: the scene's controls are not for it. */
-body[data-screen="mesh"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level),
-body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level) {
+body[data-screen="mesh"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level, #click-move),
+body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level, #click-move) {
   display: none;
 }
 

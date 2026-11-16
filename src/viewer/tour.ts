@@ -28,7 +28,7 @@ import { setupCollisionOverlay, setupVoxelOverlay } from "./collision-overlay";
 import { setupDebugPanel } from "./debug-panel";
 import { parseVoxelGrid } from "./voxel-grid";
 import { setupWalker, type WalkOptions } from "./walk";
-import { setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
+import { setupClickMoveSwitch, setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
 import { setupSceneTransition } from "./scene-transition";
@@ -188,6 +188,15 @@ export async function startTour({
   const eyeLevel = setupEyeLevelSwitch(() => {
     applyEyeLevel();
     // The eye eases to the new height.
+    loop.invalidate();
+  });
+  const clickMoveSwitch = setupClickMoveSwitch((on) => {
+    if (!on) {
+      stopClickMove();
+      floorCursor.set(null);
+    } else {
+      queueHover();
+    }
     loop.invalidate();
   });
   const jumpButton = document.getElementById("jump-btn") as HTMLButtonElement;
@@ -726,7 +735,7 @@ export async function startTour({
 
   // Goes to a clicked spot: walks there facing the way it goes, or flies there.
   function clickMove(ndc: THREE.Vector2): void {
-    if (screen !== "scene" || busy || glide) return;
+    if (screen !== "scene" || busy || glide || !clickMoveSwitch.enabled()) return;
     const target = clickTarget(ndc);
     if (!target) return;
     stopClickMove();
@@ -765,7 +774,8 @@ export async function startTour({
   // The ring under the mouse (walking only: the voxels are cheap to hit, the splat is not).
   function updateHover(): void {
     hoverQueued = false;
-    const over = lastMouse !== null && screen === "scene" && !busy && walker.isEnabled() && !autoWalk;
+    const over =
+      lastMouse !== null && screen === "scene" && !busy && walker.isEnabled() && !autoWalk && clickMoveSwitch.enabled();
     // Over an entrance's icon, a click opens it instead (the interaction sets the pointer cursor).
     const target = over && canvas.style.cursor !== "pointer" ? clickTarget(lastMouse as THREE.Vector2) : null;
     if (!autoWalk) floorCursor.set(target?.mark ?? null, target?.markNormal);
