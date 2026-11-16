@@ -60,6 +60,8 @@ const GOLD = "#c9a24c";
 const PEARL_COLOR = "#2a5bd0";
 /** Medals are this much smaller than plain coins. */
 const LIT_SIZE = 0.85;
+/** How often the coins are checked for a splat surface in front of them (ms). */
+const OCCLUSION_CHECK_MS = 250;
 /** World distance under which the pearl becomes a medal, and the pearl's size relative to a coin. */
 const DOT_NEAR = 4;
 const DOT_SIZE = 0.38;
@@ -195,8 +197,12 @@ export interface MarkerOptions {
 
 export interface EntranceMarkers {
   setEntrances(entrances: Entrance[], rootScale: number): void;
-  /** Re-orients and re-sizes the coins for the camera; call after it moves. */
-  update(camera: THREE.Camera): void;
+  /**
+   * Re-orients and re-sizes the coins for the camera; call after it moves.
+   * With an occluder (the splat mesh), a coin is hidden while a splat
+   * surface stands between it and the camera.
+   */
+  update(camera: THREE.Camera, occluder?: THREE.Object3D | null): void;
   /**
    * Entrance under the given normalized device coordinates, if any. Coins
    * behind the occluder (the splat mesh) are skipped.
@@ -224,6 +230,8 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
   rimGeometry.rotateX(Math.PI / 2);
   const bezelGeometry = new THREE.TorusGeometry(unitRadius - 0.025, 0.045, 10, 48);
   const dotGeometry = new THREE.SphereGeometry(unitRadius, 24, 16);
+  const occlusionRay = new THREE.Raycaster();
+  let lastOcclusionCheck = 0;
   const shadowGeometry = new THREE.PlaneGeometry(1, 1);
   shadowGeometry.rotateX(-Math.PI / 2);
   const materials = new Map<IconKind, CoinParts>();
@@ -364,7 +372,9 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     toCamera.copy(camera.position).sub(worldAnchor);
     const distance = Math.max(toCamera.length(), 1e-3);
     toCamera.divideScalar(distance);
-    coin.visible = distance > NEAR_HIDE;
+    // Behind a splat surface (see update): the scan's splats are not fully
+    // opaque, so the coin (and its glow and shadow) would show through faintly.
+    coin.visible = distance > NEAR_HIDE && coin.userData.occluded !== true;
 
     // Position: lifted towards the camera, back in root-local coordinates.
     const world = worldAnchor.clone().addScaledVector(toCamera, distance * LIFT);
@@ -425,7 +435,33 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
         entrancesById.set(entrance.id, entrance);
       }
     },
-    update(camera: THREE.Camera) {
+    update(camera: THREE.Camera, occluder?: THREE.Object3D | null) {
+      // A coin behind a splat surface is hidden: the splats are blended over
+      // it and write no depth, and a scan's walls are not fully opaque, so
+      // the pearl (and its glow, drawn over the splats) would show through
+      // them faintly. Its line of sight is checked as picking does, a few
+      // times a second.
+      const now = performance.now();
+      if (occluder && now - lastOcclusionCheck >= OCCLUSION_CHECK_MS) {
+        lastOcclusionCheck = now;
+        const eye = camera.getWorldPosition(new THREE.Vector3());
+        for (const coin of coinsById.values()) {
+          const at = coin.getWorldPosition(new THREE.Vector3());
+          const along = at.clone().sub(eye);
+          const distance = along.length();
+          if (distance <= NEAR_HIDE) {
+            coin.userData.occluded = false;
+            continue;
+          }
+          const limit = distance * 0.97;
+          occlusionRay.set(eye, along.divideScalar(distance));
+          occlusionRay.far = limit;
+          coin.userData.occluded = occlusionRay.intersectObject(occluder, false).some((h) => h.distance < limit);
+        }
+        occlusionRay.far = Infinity;
+      } else if (!occluder) {
+        for (const coin of coinsById.values()) coin.userData.occluded = false;
+      }
       for (const coin of coinsById.values()) {
         placeCoin(coin, camera);
       }

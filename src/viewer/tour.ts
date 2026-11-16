@@ -910,7 +910,7 @@ export async function startTour({
     lastPosition.copy(camera.position);
     lastQuaternion.copy(camera.quaternion);
     // Cheap for a handful of coins, and covers hover changes too.
-    markers.update(camera);
+    markers.update(camera, splatView.getMesh());
     if (!busy && performance.now() - lastPrefetchCheck > PREFETCH_CHECK_MS) {
       lastPrefetchCheck = performance.now();
       for (const e of current.entrances) {
