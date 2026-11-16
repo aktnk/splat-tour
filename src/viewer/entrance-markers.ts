@@ -36,8 +36,11 @@ const NEAR_HIDE = 0.25;
 
 type IconKind = "entrance" | "exit" | "mesh" | "url" | "view";
 
-// Look: far away a coin is a small glowing deep blue pearl, the same for every kind
-// (the medal names the kind once near, so the pearl only says "here"); within
+// Look: far away a coin is a small deep blue pearl, the same for every kind
+// (the medal names the kind once near, so the pearl only says "here"); it is
+// not bright (a glowing one showed through the scan's not quite opaque walls
+// from where it should not be seen) but wiggles sideways for a moment every
+// few seconds (wiggle()) to catch the eye; within
 // DOT_NEAR (or hovered) it becomes a medal: calm enamel in a gold bezel,
 // lit by a room environment (as the model screen) so it does not look
 // pasted onto the photographic scene. In scenes with walk voxels it casts a
@@ -53,15 +56,14 @@ const CALM_COLOR: Record<IconKind, string> = {
   view: "#1e7a73",
 };
 const GOLD = "#c9a24c";
-/**
- * The far-away pearl of every kind: a glowing deep blue, calm against the
- * photographic scene (a bright gold one read as an eclipse from afar).
- */
+/** The far-away pearl of every kind: a deep blue, lit by the room environment like the medals. */
 const PEARL_COLOR = "#2a5bd0";
+/** A pearl's wiggle: how long (ms), how many swings, and how far (in coin sizes, sideways on screen). */
+const WIGGLE_MS = 600;
+const WIGGLE_SWINGS = 3;
+const WIGGLE_AMPLITUDE = 0.35;
 /** Medals are this much smaller than plain coins. */
 const LIT_SIZE = 0.85;
-/** How often the coins are checked for a splat surface in front of them (ms). */
-const OCCLUSION_CHECK_MS = 250;
 /** World distance under which the pearl becomes a medal, and the pearl's size relative to a coin. */
 const DOT_NEAR = 4;
 const DOT_SIZE = 0.38;
@@ -197,12 +199,10 @@ export interface MarkerOptions {
 
 export interface EntranceMarkers {
   setEntrances(entrances: Entrance[], rootScale: number): void;
-  /**
-   * Re-orients and re-sizes the coins for the camera; call after it moves.
-   * With `blocked` (whether something solid stands on the straight line
-   * between two world points), a coin is hidden while something does.
-   */
-  update(camera: THREE.Camera, blocked?: ((from: THREE.Vector3, to: THREE.Vector3) => boolean) | null): void;
+  /** Re-orients and re-sizes the coins for the camera; call after it moves and while a wiggle runs. */
+  update(camera: THREE.Camera): void;
+  /** Starts the pearls' short sideways wiggle; returns how long it runs (ms), for the caller to keep frames coming. */
+  wiggle(): number;
   /**
    * Entrance under the given normalized device coordinates, if any. Coins
    * behind the occluder (the splat mesh) are skipped.
@@ -230,7 +230,6 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
   rimGeometry.rotateX(Math.PI / 2);
   const bezelGeometry = new THREE.TorusGeometry(unitRadius - 0.025, 0.045, 10, 48);
   const dotGeometry = new THREE.SphereGeometry(unitRadius, 24, 16);
-  let lastOcclusionCheck = 0;
   const shadowGeometry = new THREE.PlaneGeometry(1, 1);
   shadowGeometry.rotateX(-Math.PI / 2);
   const materials = new Map<IconKind, CoinParts>();
@@ -240,7 +239,8 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     lit && options.renderer
       ? new THREE.PMREMGenerator(options.renderer).fromScene(new RoomEnvironment(), 0.04).texture
       : null;
-  const haloTexture = lit ? createSoftDiscTexture("rgba(255, 244, 214, 0.9)") : null;
+  let wiggleStart = -Infinity;
+  let wiggleOffset = 0;
   const shadowTexture = lit ? createSoftDiscTexture("rgba(0, 0, 0, 1)") : null;
   let groundAt: ((point: THREE.Vector3) => number | null) | null = null;
 
@@ -279,9 +279,9 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
       color: PEARL_COLOR,
       metalness: 0.2,
       roughness: 0.25,
+      // A touch of its own light, so it still reads in a dim room (not a glow).
       emissive: new THREE.Color(PEARL_COLOR),
-      // Lit evenly by its own glow, so the middle is not darker than the halo.
-      emissiveIntensity: 1,
+      emissiveIntensity: 0.2,
     });
     return dotMaterialShared;
   }
@@ -308,21 +308,10 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     }
     coin.add(body);
     coin.userData.body = body;
-    if (haloTexture) {
+    if (lit) {
       const dot = new THREE.Group();
       const pearl = new THREE.Mesh(dotGeometry, dotMaterial());
-      const halo = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: haloTexture,
-          color: PEARL_COLOR,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          transparent: true,
-          toneMapped: false,
-        }),
-      );
-      halo.scale.setScalar(2.0);
-      dot.add(pearl, halo);
+      dot.add(pearl);
       dot.scale.setScalar(DOT_SIZE / LIT_SIZE);
       coin.add(dot);
       coin.userData.dot = dot;
@@ -371,9 +360,7 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
     toCamera.copy(camera.position).sub(worldAnchor);
     const distance = Math.max(toCamera.length(), 1e-3);
     toCamera.divideScalar(distance);
-    // Behind a splat surface (see update): the scan's splats are not fully
-    // opaque, so the coin (and its glow and shadow) would show through faintly.
-    coin.visible = distance > NEAR_HIDE && coin.userData.occluded !== true;
+    coin.visible = distance > NEAR_HIDE;
 
     // Position: lifted towards the camera, back in root-local coordinates.
     const world = worldAnchor.clone().addScaledVector(toCamera, distance * LIFT);
@@ -402,6 +389,8 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
       const near = distance < DOT_NEAR || coin.userData.entranceId === hoveredId;
       dot.visible = !near;
       (coin.userData.body as THREE.Object3D).visible = near;
+      // The wiggle: sideways in the coin's plane, which faces the camera.
+      dot.position.x = wiggleOffset * (DOT_SIZE / LIT_SIZE);
     }
     placeShadow(coin, worldSize);
   }
@@ -413,9 +402,6 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
       if (shadow) {
         group.remove(shadow);
         (shadow.material as THREE.Material).dispose();
-      }
-      for (const sprite of (coin.userData.dot as THREE.Object3D | undefined)?.children ?? []) {
-        if (sprite instanceof THREE.Sprite) sprite.material.dispose();
       }
     }
     coinsById = new Map();
@@ -434,25 +420,18 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
         entrancesById.set(entrance.id, entrance);
       }
     },
-    update(camera: THREE.Camera, blocked?: ((from: THREE.Vector3, to: THREE.Vector3) => boolean) | null) {
-      // A coin behind a wall is hidden: the splats are blended over it and
-      // write no depth, and a scan's walls are not fully opaque, so the pearl
-      // (and its glow, drawn over the splats) would show through them
-      // faintly. Its line of sight is checked a few times a second.
-      const now = performance.now();
-      if (blocked && now - lastOcclusionCheck >= OCCLUSION_CHECK_MS) {
-        lastOcclusionCheck = now;
-        const eye = camera.getWorldPosition(new THREE.Vector3());
-        for (const coin of coinsById.values()) {
-          const at = coin.getWorldPosition(new THREE.Vector3());
-          coin.userData.occluded = at.distanceTo(eye) > NEAR_HIDE && blocked(eye, at);
-        }
-      } else if (!blocked) {
-        for (const coin of coinsById.values()) coin.userData.occluded = false;
-      }
+    update(camera: THREE.Camera) {
+      const t = (performance.now() - wiggleStart) / WIGGLE_MS;
+      const wiggling = t >= 0 && t < 1;
+      // Swings that die down.
+      wiggleOffset = wiggling ? WIGGLE_AMPLITUDE * Math.sin(2 * Math.PI * WIGGLE_SWINGS * t) * (1 - t) : 0;
       for (const coin of coinsById.values()) {
         placeCoin(coin, camera);
       }
+    },
+    wiggle() {
+      wiggleStart = performance.now();
+      return WIGGLE_MS;
     },
     pick(ndc: THREE.Vector2, camera: THREE.Camera, occluder: THREE.Object3D | null) {
       raycaster.setFromCamera(ndc, camera);
