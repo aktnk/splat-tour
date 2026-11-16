@@ -84,6 +84,10 @@ const WHEEL_MAX_QUEUE = 1.5;
 const WHEEL_EASE_RATE = 15;
 /** Mouse wheel: below this the rest is walked in one go (world units). */
 const WHEEL_SNAP = 0.005;
+/** An icon is hidden behind a wall only if the wall is this far before it (world units), not its own wall. */
+const OCCLUSION_MARGIN = 0.3;
+/** Without walk voxels: how far apart (world units) the parallel lines that tell a wall from a floater are. */
+const OCCLUSION_SPREAD = 0.2;
 
 type Screen = "scene" | "mesh" | "web";
 
@@ -728,6 +732,42 @@ export async function startTour({
     return hit && hit.distance <= CLICK_MOVE_MAX ? { point: hit.point.clone(), walk: false, mark: hit.point.clone() } : null;
   }
 
+  // Whether something solid stands between two world points (an icon hidden
+  // behind a wall): the walk voxels where the scene has them (they hold the
+  // floor and walls connected to where one stands, without floaters), else
+  // the splats; Spark's raycast gives only the nearest splat, so a hit is a
+  // wall only if most of four parallel lines around it are blocked too (a
+  // floater is small). The last bit before `to` is not looked at (the
+  // icon's own wall).
+  const occlusionRay = new THREE.Raycaster();
+  function lineBlocked(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const along = to.clone().sub(from);
+    const distance = along.length();
+    if (distance < 1e-3) return false;
+    along.divideScalar(distance);
+    const reach = distance - Math.max(OCCLUSION_MARGIN, distance * 0.03);
+    if (reach <= 0) return false;
+    if (walker.grid()) return walker.raycast(from, along, reach) !== null;
+    const mesh = splatView.getMesh();
+    if (!mesh) return false;
+    const hits = (origin: THREE.Vector3) => {
+      occlusionRay.set(origin, along);
+      occlusionRay.far = reach;
+      return occlusionRay.intersectObject(mesh, false).some((h) => h.distance < reach);
+    };
+    if (!hits(from)) return false;
+    // Across the line: sideways (horizontal) and up/down from it.
+    const side = new THREE.Vector3(-along.z, 0, along.x);
+    if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+    side.normalize().multiplyScalar(OCCLUSION_SPREAD);
+    const up = new THREE.Vector3().crossVectors(side, along).normalize().multiplyScalar(OCCLUSION_SPREAD);
+    let blocked = 0;
+    for (const offset of [side, side.clone().negate(), up, up.clone().negate()]) {
+      if (hits(from.clone().add(offset))) blocked++;
+    }
+    return blocked >= 3;
+  }
+
   function stopClickMove(): void {
     autoWalk = null;
     pendingWheel = 0;
@@ -910,7 +950,7 @@ export async function startTour({
     lastPosition.copy(camera.position);
     lastQuaternion.copy(camera.quaternion);
     // Cheap for a handful of coins, and covers hover changes too.
-    markers.update(camera, splatView.getMesh());
+    markers.update(camera, lineBlocked);
     if (!busy && performance.now() - lastPrefetchCheck > PREFETCH_CHECK_MS) {
       lastPrefetchCheck = performance.now();
       for (const e of current.entrances) {

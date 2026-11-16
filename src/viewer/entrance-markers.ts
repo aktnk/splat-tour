@@ -199,10 +199,10 @@ export interface EntranceMarkers {
   setEntrances(entrances: Entrance[], rootScale: number): void;
   /**
    * Re-orients and re-sizes the coins for the camera; call after it moves.
-   * With an occluder (the splat mesh), a coin is hidden while a splat
-   * surface stands between it and the camera.
+   * With `blocked` (whether something solid stands on the straight line
+   * between two world points), a coin is hidden while something does.
    */
-  update(camera: THREE.Camera, occluder?: THREE.Object3D | null): void;
+  update(camera: THREE.Camera, blocked?: ((from: THREE.Vector3, to: THREE.Vector3) => boolean) | null): void;
   /**
    * Entrance under the given normalized device coordinates, if any. Coins
    * behind the occluder (the splat mesh) are skipped.
@@ -230,7 +230,6 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
   rimGeometry.rotateX(Math.PI / 2);
   const bezelGeometry = new THREE.TorusGeometry(unitRadius - 0.025, 0.045, 10, 48);
   const dotGeometry = new THREE.SphereGeometry(unitRadius, 24, 16);
-  const occlusionRay = new THREE.Raycaster();
   let lastOcclusionCheck = 0;
   const shadowGeometry = new THREE.PlaneGeometry(1, 1);
   shadowGeometry.rotateX(-Math.PI / 2);
@@ -435,31 +434,20 @@ export function setupEntranceMarkers(root: THREE.Object3D, options: MarkerOption
         entrancesById.set(entrance.id, entrance);
       }
     },
-    update(camera: THREE.Camera, occluder?: THREE.Object3D | null) {
-      // A coin behind a splat surface is hidden: the splats are blended over
-      // it and write no depth, and a scan's walls are not fully opaque, so
-      // the pearl (and its glow, drawn over the splats) would show through
-      // them faintly. Its line of sight is checked as picking does, a few
-      // times a second.
+    update(camera: THREE.Camera, blocked?: ((from: THREE.Vector3, to: THREE.Vector3) => boolean) | null) {
+      // A coin behind a wall is hidden: the splats are blended over it and
+      // write no depth, and a scan's walls are not fully opaque, so the pearl
+      // (and its glow, drawn over the splats) would show through them
+      // faintly. Its line of sight is checked a few times a second.
       const now = performance.now();
-      if (occluder && now - lastOcclusionCheck >= OCCLUSION_CHECK_MS) {
+      if (blocked && now - lastOcclusionCheck >= OCCLUSION_CHECK_MS) {
         lastOcclusionCheck = now;
         const eye = camera.getWorldPosition(new THREE.Vector3());
         for (const coin of coinsById.values()) {
           const at = coin.getWorldPosition(new THREE.Vector3());
-          const along = at.clone().sub(eye);
-          const distance = along.length();
-          if (distance <= NEAR_HIDE) {
-            coin.userData.occluded = false;
-            continue;
-          }
-          const limit = distance * 0.97;
-          occlusionRay.set(eye, along.divideScalar(distance));
-          occlusionRay.far = limit;
-          coin.userData.occluded = occlusionRay.intersectObject(occluder, false).some((h) => h.distance < limit);
+          coin.userData.occluded = at.distanceTo(eye) > NEAR_HIDE && blocked(eye, at);
         }
-        occlusionRay.far = Infinity;
-      } else if (!occluder) {
+      } else if (!blocked) {
         for (const coin of coinsById.values()) coin.userData.occluded = false;
       }
       for (const coin of coinsById.values()) {
