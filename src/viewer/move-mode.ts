@@ -76,3 +76,48 @@ export function setupEyeLevelSwitch(onChange: (level: EyeLevel) => void): EyeLev
     level: () => level,
   };
 }
+
+/**
+ * "◯ クリックで移動" (on touch "タップで移動") toggle: whether a click or tap
+ * on the floor goes there and the ring shows where. Remembered in this
+ * browser (a convenience: it works without storage too).
+ */
+export interface ClickMoveSwitch {
+  enabled(): boolean;
+}
+
+const CLICK_MOVE_KEY = "splat-tour:clickMove";
+
+export function setupClickMoveSwitch(onChange: (enabled: boolean) => void): ClickMoveSwitch {
+  const button = document.getElementById("click-move") as HTMLButtonElement | null;
+  let enabled = true;
+  try {
+    enabled = localStorage.getItem(CLICK_MOVE_KEY) !== "off";
+  } catch {
+    // No storage (private window, blocked): on, as by default.
+  }
+  if (!button) return { enabled: () => enabled };
+  const touch = window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  const label = touch ? "タップで移動" : "クリックで移動";
+  function show(): void {
+    button!.setAttribute("aria-pressed", String(enabled));
+    button!.textContent = `◯ ${label}：${enabled ? "入" : "切"}`;
+    button!.title = enabled
+      ? `床を${touch ? "タップ" : "クリック"}すると、そこへ移動します（押すと切）`
+      : `床の${touch ? "タップ" : "クリック"}では移動しません（押すと入）`;
+  }
+  show();
+  button.addEventListener("click", () => {
+    // Space jumps; it must not press this button again.
+    button.blur();
+    enabled = !enabled;
+    try {
+      localStorage.setItem(CLICK_MOVE_KEY, enabled ? "on" : "off");
+    } catch {
+      // Only a convenience.
+    }
+    show();
+    onChange(enabled);
+  });
+  return { enabled: () => enabled };
+}
