@@ -14,6 +14,7 @@ export { setupSplatView, type SplatView } from "./splat-view";
 export { setupEntranceMarkers, type EntranceMarkers, type MarkerOptions } from "./entrance-markers";
 export { setupBarriers, type Barriers } from "./barriers";
 export { setupBoundary, type Boundary } from "./boundary";
+export { setupPlates, type Plates } from "./plates";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";
 export { levelingRotation } from "./floor-align";

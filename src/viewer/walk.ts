@@ -10,7 +10,9 @@ import type { VoxelGrid } from "./voxel-grid";
 // above the step height to the eyes; under a low ceiling the eyes come down
 // (crouching, to MIN_CROUCH of eyeHeight) instead of the walk stopping. Specks (lumps smaller than about
 // SPECK_SIZE across, e.g. floaters) can be ignored for the body. The
-// invisible walls (barriers.ts) join the voxels for the body, not as floor.
+// invisible walls (barriers.ts) join the voxels for the body, not as floor;
+// the plates covering holes in the scan (plates.ts) join them as everything:
+// floor, wall and ceiling, walking and flying.
 //
 // Jumping (jump()) throws the body up to jumpHeight under GRAVITY; in the
 // air it moves on at the height it has and lands on whatever is under its
@@ -82,6 +84,12 @@ export interface Walker {
   inAir(): boolean;
   /** More things the body bumps into, as world points (the invisible walls), besides the voxels. */
   setBodyObstacle(test: ((x: number, y: number, z: number) => boolean) | null): void;
+  /**
+   * More solid things, as world points (the plates over holes in the scan):
+   * stood on, bumped into and flown against like the voxels, never specks.
+   * Flying stops at them even in a scene without voxels.
+   */
+  setSolid(test: ((x: number, y: number, z: number) => boolean) | null): void;
   /** Ground height under a world point, or null (no grid, or no ground near). */
   groundAt(position: THREE.Vector3, from?: number): number | null;
   /** The first voxel a world ray meets within `maxDistance` (world units), as a world point, or null. */
@@ -178,6 +186,7 @@ export function setupWalker(initial: WalkOptions): Walker {
   // The eye stays where a view put it until the walker moves (hold()).
   let held = false;
   let extraObstacle: ((x: number, y: number, z: number) => boolean) | null = null;
+  let extraSolid: ((x: number, y: number, z: number) => boolean) | null = null;
   const local = new THREE.Vector3();
   const probe = new THREE.Vector3();
 
@@ -195,6 +204,7 @@ export function setupWalker(initial: WalkOptions): Walker {
 
   /** Whether a voxel is something to stand on or bump into (specks may not be). */
   function obstacle(x: number, y: number, z: number): boolean {
+    if (extraSolid?.(x, y, z)) return true;
     if (!solid(x, y, z) || !grid || !root) return false;
     if (!options.ignoreSpecks) return true;
     const voxelsAcross = SPECK_SIZE / (grid.resolution * root.getWorldScale(probe).x);
@@ -499,7 +509,7 @@ export function setupWalker(initial: WalkOptions): Walker {
 
   const walker: Walker = {
     flyConstrain(previous, target) {
-      if (!grid || !root) return false;
+      if ((!grid || !root) && !extraSolid) return false;
       const total = target.clone().sub(previous);
       const length = total.length();
       if (length === 0) return false;
@@ -561,6 +571,9 @@ export function setupWalker(initial: WalkOptions): Walker {
     inAir: () => air !== null,
     setBodyObstacle(test) {
       extraObstacle = test;
+    },
+    setSolid(test) {
+      extraSolid = test;
     },
     grid: () => grid,
     blocked: () => block,

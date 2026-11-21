@@ -119,6 +119,16 @@ export interface Boundary {
   points: Vec3[];
 }
 
+/**
+ * A plate covering a hole in the scan (a roof, a floor, the canopy of a
+ * wood): a flat polygon through points on the hole's rim (scene-local; at
+ * least three, in order around it), fitted to a plane. It is solid like the
+ * scanned surfaces: walked on, bumped into, and flown against.
+ */
+export interface Plate {
+  points: Vec3[];
+}
+
 /** Axis-aligned box in scene-local coordinates that the camera cannot leave. */
 export interface Bounds {
   min: Vec3;
@@ -164,6 +174,8 @@ export interface Scene {
    * entrance barriers, they cannot be passed walking or flying.
    */
   walls: WallLine[];
+  /** Plates covering holes in the scan (roofs, floors), solid like it. */
+  plates: Plate[];
   entrances: Entrance[];
 }
 
@@ -367,6 +379,18 @@ function wallLines(value: unknown, path: string): WallLine[] {
   });
 }
 
+function plates(value: unknown, path: string): Plate[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) fail(path, "配列である必要があります");
+  return value.map((item, i) => {
+    const plate = obj(item, `${path}[${i}]`);
+    if (!Array.isArray(plate.points) || plate.points.length < 3) {
+      fail(`${path}[${i}].points`, "3点以上の座標の配列である必要があります");
+    }
+    return { points: plate.points.map((p: unknown, j: number) => vec3(p, `${path}[${i}].points[${j}]`)) };
+  });
+}
+
 function barrier(value: unknown, byDefault: boolean, path: string): Barrier | false | undefined {
   if (value === false || value === null) return false;
   const defaults = { width: DEFAULT_BARRIER_WIDTH, height: DEFAULT_WALL_HEIGHT };
@@ -421,6 +445,7 @@ function scene(value: unknown, path: string): Scene {
     boundary: s.boundary === undefined ? undefined : boundary(s.boundary, `${path}.boundary`),
     walk: s.walk === undefined ? undefined : walk(s.walk, `${path}.walk`),
     walls: wallLines(s.walls, `${path}.walls`),
+    plates: plates(s.plates, `${path}.plates`),
     entrances: entrances.map((e, i) => entrance(e, `${path}.entrances[${i}]`)),
   };
 }
@@ -518,7 +543,7 @@ export function entranceThumbnail(entrance: Entrance): string | undefined {
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["version", "title", "startSceneId", "assetBaseUrl", "scenes"],
-  scene: ["id", "title", "splat", "transform", "render", "camera", "initialView", "bounds", "boundary", "walk", "walls", "entrances"],
+  scene: ["id", "title", "splat", "transform", "render", "camera", "initialView", "bounds", "boundary", "walk", "walls", "plates", "entrances"],
   splat: ["url", "paged"],
   transform: ["rotation", "flipX", "flipY", "flipZ", "scale"],
   render: ["exposure", "focalAdjustment"],
@@ -528,6 +553,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   boundary: ["points"],
   walk: ["voxels", "eyeHeight", "childEyeHeight", "radius", "stepHeight", "jumpHeight", "start"],
   wall: ["points", "height"],
+  plate: ["points"],
   entrance: ["id", "position", "kind", "title", "description", "thumbnail", "image", "autoThumbnail", "preview", "target", "barrier"],
   barrier: ["width", "yaw", "height"],
   "target.scene": ["type", "sceneId", "arrival"],
@@ -593,6 +619,7 @@ export function manifestWarnings(value: unknown): string[] {
       for (const kind of ["splat", "transform", "render", "camera", "bounds", "boundary", "walk"] as const) check(s[kind], kind, `${sp}.${kind}`);
       check(s.initialView, "view", `${sp}.initialView`);
       each(s.walls, (w, wp) => check(w, "wall", wp), `${sp}.walls`);
+      each(s.plates, (w, wp) => check(w, "plate", wp), `${sp}.plates`);
       each(
         s.entrances,
         (e, ep) => {
