@@ -85,7 +85,7 @@ const WHEEL_EASE_RATE = 15;
 /** Mouse wheel: below this the rest is walked in one go (world units). */
 const WHEEL_SNAP = 0.005;
 /** At most this many ?debug=1 voxels are drawn (the nearest). */
-const VOXEL_OVERLAY_LIMIT = 400_000;
+const VOXEL_OVERLAY_LIMIT = 1_000_000;
 const VOXEL_OVERLAY_COLOR = 0xff9a3c;
 /** The far-away pearls wiggle for a moment this often (ms): a few frames, so a still view stays mostly asleep. */
 const WIGGLE_PERIOD_MS = 5000;
@@ -169,6 +169,7 @@ export async function startTour({
       updateWalkControls();
       showVoxels = settings.showVoxels;
       voxelRange = settings.voxelRange;
+      voxelMerge = settings.voxelMerge;
       voxelOverlay.setStyle({ color: VOXEL_OVERLAY_COLOR, opacity: settings.voxelOpacity });
       voxelCenter = null;
       if (!showVoxels) {
@@ -252,6 +253,7 @@ export async function startTour({
   let voxelCenter: THREE.Vector3 | null = null;
   // How far around the camera the ?debug=1 voxels are shown (m).
   let voxelRange = 10;
+  let voxelMerge = false;
   // The last drawn voxels, for the debug panel.
   let voxelSummary = "";
   let lastTick = performance.now();
@@ -981,13 +983,13 @@ export async function startTour({
     const grid = walker.grid();
     if (!voxelCenter || voxelCenter.distanceTo(center) >= Math.max(0.5, radius / 5)) {
       voxelCenter = center;
-      voxelOverlay.setRange(radius, VOXEL_OVERLAY_LIMIT);
+      voxelOverlay.setRange(radius, VOXEL_OVERLAY_LIMIT, voxelMerge);
       const shown = voxelOverlay.show(grid, center);
       // What is drawn, and how big the voxel data is (in m), to tell a short range from short data.
       const scale = splatView.root.scale.x || 1;
       voxelSummary = grid
         ? `ボクセル ${shown.boxes.toLocaleString()} 個を表示（最も遠いもの ${(shown.farthest * scale).toFixed(1)} m${
-            shown.boxes >= VOXEL_OVERLAY_LIMIT ? "、上限に達しています" : ""
+            shown.boxes >= VOXEL_OVERLAY_LIMIT ? "、上限に達しています。「遠くの箱をまとめる」で広く表示できます" : ""
           }）。データの大きさ ${grid.extent.map((v) => (v * scale).toFixed(1)).join(" × ")} m`
         : "";
     }

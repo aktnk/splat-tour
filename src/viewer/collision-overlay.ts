@@ -106,17 +106,18 @@ export interface VoxelOverlay {
   /** Colour (e.g. 0xffffff) and opacity (0-1, of the box edges; their faces a third of it) of the boxes; orange at 0.45 by default. */
   setStyle(style: { color: number; opacity: number }): void;
   /**
-   * How far around the point voxels are shown (scene-local units) and at
-   * most how many (the nearest); null for the default, 30 voxels and 60000.
-   * Applies from the next show().
+   * How far around the point voxels are shown (scene-local units), at most
+   * how many (the nearest), and whether far parts are merged into larger
+   * boxes (fewer and quicker, but not all the voxels' size); null for the
+   * default, 30 voxels and 60000, unmerged. Applies from the next show().
    */
-  setRange(radius: number | null, limit?: number): void;
+  setRange(radius: number | null, limit?: number, mergeFar?: boolean): void;
 }
 
 const VOXEL_RADIUS = 30; // in voxels around the camera
 const VOXEL_LIMIT = 60000;
-// Far away, parts of the tree are drawn as one box once their edge is at most
-// this times their distance (40 cm blocks of 10 cm voxels from about 13 m).
+// With mergeFar, parts of the tree are drawn as one box once their edge is at
+// most this times their distance (40 cm blocks of 10 cm voxels from about 13 m).
 const VOXEL_DETAIL = 0.03;
 // Brightness by face (+x, -x, +y, -y, +z, -z): lit from above, so boxes read
 // as boxes even where only the front layer shows.
@@ -171,11 +172,13 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
   const matrix = new THREE.Matrix4();
   let range: number | null = null;
   let limit = VOXEL_LIMIT;
+  let detail = 0;
 
   return {
-    setRange(radius, max = VOXEL_LIMIT) {
+    setRange(radius, max = VOXEL_LIMIT, mergeFar = false) {
       range = radius;
       limit = max;
+      detail = mergeFar ? VOXEL_DETAIL : 0;
     },
     setStyle({ color, opacity }) {
       material.color.set(color);
@@ -192,7 +195,7 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
       let count = 0;
       if (grid) {
         // Only the voxels on a surface: the front layer is all that shows.
-        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, VOXEL_DETAIL, true);
+        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, detail, true);
         mesh = new THREE.InstancedMesh(cube, material, Math.max(boxes.length, 1));
         mesh.count = boxes.length;
         // A little smaller than the voxel, so neighbours stay apart.
