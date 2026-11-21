@@ -13,6 +13,7 @@ export { defaultFrameLoopOptions, setupFrameLoop, type FrameLoop, type FrameLoop
 export { setupSplatView, type SplatView } from "./splat-view";
 export { setupEntranceMarkers, type EntranceMarkers, type MarkerOptions } from "./entrance-markers";
 export { setupBarriers, type Barriers } from "./barriers";
+export { setupFlyArea, type FlyArea } from "./fly-area";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";
 export { levelingRotation } from "./floor-align";
