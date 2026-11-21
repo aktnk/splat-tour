@@ -142,8 +142,8 @@ const MIN_CROUCH = 0.6;
 const HEAD_CLEARANCE_VOXELS = 1;
 /**
  * Pushing into a wall closer to head-on than this (the sine of the angle
- * between the move and the wall) stands still instead of sliding: there is
- * no side to go, and creeping one way and snapping back the other shakes the view.
+ * between the move and the wall), the way along it is not clear from the
+ * wall's direction: the turns of SLIDE_ANGLES decide, keeping to one side.
  */
 const HEAD_ON_SINE = Math.sin((12 * Math.PI) / 180);
 /** What was hit counts as on one side of the step only this far off its line (share of the body's radius). */
@@ -344,13 +344,12 @@ export function setupWalker(initial: WalkOptions): Walker {
         const into = sx * nx + sz * nz;
         const tx = sx - into * nx;
         const tz = sz - into * nz;
-        // Nearly straight into the surface there is nothing to slide along:
-        // stand. Otherwise along it, unless that goes towards what was
-        // clearly hit on one side (a misread tip would only wobble).
+        // Along the surface, unless the step goes nearly straight into it
+        // (no clear way along: the turns below decide) or that goes towards
+        // what was clearly hit on one side (a misread tip would only wobble).
         const turn = sx * tz - sz * tx;
-        if (into < 0 && Math.hypot(tx, tz) < stepLength * HEAD_ON_SINE) return null;
         const side = turn > 0 ? 1 : -1;
-        if (into < 0 && (side === preferred || !sideKnown)) {
+        if (into < 0 && Math.hypot(tx, tz) >= stepLength * HEAD_ON_SINE && (side === preferred || !sideKnown)) {
           for (const backoff of BACKOFFS) {
             const px = x + tx + nx * backoff * worldStep();
             const pz = z + tz + nz * backoff * worldStep();
