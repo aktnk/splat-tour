@@ -29,6 +29,7 @@ import { setupDebugPanel } from "./debug-panel";
 import { parseVoxelGrid } from "./voxel-grid";
 import { setupWalker, type WalkOptions } from "./walk";
 import { setupClickMoveSwitch, setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
+import { setupSettingsPanel } from "./settings-panel";
 import { setupBarriers } from "./barriers";
 import { setupSidebar } from "./sidebar";
 import { setupSceneTransition } from "./scene-transition";
@@ -210,6 +211,7 @@ export async function startTour({
     }
     loop.invalidate();
   });
+  setupSettingsPanel(() => loop.invalidate());
   const jumpButton = document.getElementById("jump-btn") as HTMLButtonElement;
   // On pointerdown, not click: with a thumb on the move stick, phones may
   // not send a click for a second finger's tap.
@@ -226,10 +228,12 @@ export async function startTour({
     walker.setOptions({ ...walkBase, eyeHeight });
   }
 
-  /** "大人 / 子ども" and the jump button, while walking. */
+  /** "大人 / 子供", "クリックで移動" and the jump button, while walking. */
   function updateWalkControls(): void {
     const walking = walker.isEnabled();
+    // Flying shows only "歩く / 飛ぶ" in the settings.
     eyeLevel.setAvailable(walking);
+    clickMoveSwitch.setAvailable(walking);
     jumpButton.hidden = !walking || (walkBase?.jumpHeight ?? 0) <= 0;
   }
 

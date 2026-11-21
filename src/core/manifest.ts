@@ -126,7 +126,7 @@ export interface WalkSettings {
   /** The .voxel.json, relative to assetBaseUrl. */
   voxels: string;
   eyeHeight: number;
-  /** Eye height when the visitor picks "子ども". */
+  /** Eye height when the visitor picks "子供". */
   childEyeHeight: number;
   radius: number;
   stepHeight: number;
