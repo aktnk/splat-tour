@@ -38,7 +38,7 @@ export interface VoxelGrid {
    * (at most `maxVoxels` connected through faces), e.g. a floater.
    */
   isSpeck(x: number, y: number, z: number, maxVoxels: number): boolean;
-  /** Centres of solid voxels within `radius` of a scene-local point (at most `limit`). */
+  /** Centres of solid voxels within `radius` of a scene-local point (at most `limit`, the nearest). */
   solidVoxelsNear(x: number, y: number, z: number, radius: number, limit: number): [number, number, number][];
 }
 
@@ -146,23 +146,76 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
       return small;
     },
     solidVoxelsNear(x, y, z, radius, limit) {
-      const found: [number, number, number][] = [];
+      // Walks the tree, skipping subtrees outside the sphere, so a wide
+      // radius costs the voxels found rather than the space around them.
+      // Past `limit`, the nearest are kept.
       const cx = (-x - minX) / res;
       const cy = (-y - minY) / res;
       const cz = (z - minZ) / res;
       const r = radius / res;
-      for (let ix = Math.floor(cx - r); ix <= cx + r; ix++) {
-        for (let iy = Math.floor(cy - r); iy <= cy + r; iy++) {
-          for (let iz = Math.floor(cz - r); iz <= cz + r; iz++) {
-            if ((ix + 0.5 - cx) ** 2 + (iy + 0.5 - cy) ** 2 + (iz + 0.5 - cz) ** 2 > r * r) continue;
-            if (!solidAt(ix, iy, iz)) continue;
-            // Back to scene-local coordinates.
-            found.push([-(minX + (ix + 0.5) * res), -(minY + (iy + 0.5) * res), minZ + (iz + 0.5) * res]);
-            if (found.length >= limit) return found;
-          }
+      const r2 = r * r;
+      const cap = limit * 4;
+      const found: number[] = []; // ix, iy, iz, squared distance
+      const dist2 = (ix: number, iy: number, iz: number) => (ix + 0.5 - cx) ** 2 + (iy + 0.5 - cy) ** 2 + (iz + 0.5 - cz) ** 2;
+      const emit = (ix: number, iy: number, iz: number) => {
+        const d = dist2(ix, iy, iz);
+        if (d <= r2) found.push(ix, iy, iz, d);
+      };
+      // Whether the cube of `n` voxels from (ox, oy, oz) reaches into the sphere.
+      const touches = (ox: number, oy: number, oz: number, n: number) => {
+        const dx = Math.max(ox - cx, 0, cx - (ox + n));
+        const dy = Math.max(oy - cy, 0, cy - (oy + n));
+        const dz = Math.max(oz - cz, 0, cz - (oz + n));
+        return dx * dx + dy * dy + dz * dz <= r2;
+      };
+      const visit = (word: number, level: number, bx: number, by: number, bz: number) => {
+        const n = 4 << level;
+        const ox = bx * 4;
+        const oy = by * 4;
+        const oz = bz * 4;
+        if (found.length >= cap * 4 || !touches(ox, oy, oz, n)) return;
+        if (word === SOLID) {
+          const x0 = Math.max(ox, Math.floor(cx - r));
+          const y0 = Math.max(oy, Math.floor(cy - r));
+          const z0 = Math.max(oz, Math.floor(cz - r));
+          const x1 = Math.min(ox + n, Math.ceil(cx + r));
+          const y1 = Math.min(oy + n, Math.ceil(cy + r));
+          const z1 = Math.min(oz + n, Math.ceil(cz + r));
+          for (let i = x0; i < x1; i++) for (let j = y0; j < y1; j++) for (let k = z0; k < z1; k++) emit(i, j, k);
+          return;
         }
-      }
-      return found;
+        if (level === 0) {
+          const leaf = (word & 0xffffff) * 2;
+          for (let bit = 0; bit < 64; bit++) {
+            const solid = bit < 32 ? (leaves[leaf] >>> bit) & 1 : (leaves[leaf + 1] >>> (bit - 32)) & 1;
+            if (solid) emit(ox + (bit & 3), oy + ((bit >> 2) & 3), oz + ((bit >> 4) & 3));
+          }
+          return;
+        }
+        const mask = word >>> 24;
+        const first = word & 0xffffff;
+        const half = 1 << (level - 1);
+        let index = 0;
+        for (let octant = 0; octant < 8; octant++) {
+          if (!(mask & (1 << octant))) continue;
+          visit(
+            nodes[first + index++],
+            level - 1,
+            bx + (octant & 1 ? half : 0),
+            by + (octant & 2 ? half : 0),
+            bz + (octant & 4 ? half : 0),
+          );
+        }
+      };
+      if (nodes.length > 0) visit(nodes[0], depth, 0, 0, 0);
+      let order = Array.from({ length: found.length / 4 }, (_, i) => i);
+      if (order.length > limit) order = order.sort((a, b) => found[a * 4 + 3] - found[b * 4 + 3]).slice(0, limit);
+      // Back to scene-local coordinates.
+      return order.map((i) => [
+        -(minX + (found[i * 4] + 0.5) * res),
+        -(minY + (found[i * 4 + 1] + 0.5) * res),
+        minZ + (found[i * 4 + 2] + 0.5) * res,
+      ]);
     },
   };
 }

@@ -102,6 +102,12 @@ export interface VoxelOverlay {
   show(grid: VoxelGrid | null, center: THREE.Vector3): void;
   /** Colour (e.g. 0xffffff) and opacity (0-1) of the boxes; orange at 0.35 by default. */
   setStyle(style: { color: number; opacity: number }): void;
+  /**
+   * How far around the point voxels are shown (scene-local units) and at
+   * most how many (the nearest); null for the default, 30 voxels and 60000.
+   * Applies from the next show().
+   */
+  setRange(radius: number | null, limit?: number): void;
 }
 
 const VOXEL_RADIUS = 30; // in voxels around the camera
@@ -113,8 +119,14 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
   const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.35, depthWrite: false });
   let mesh: THREE.InstancedMesh | null = null;
   const matrix = new THREE.Matrix4();
+  let range: number | null = null;
+  let limit = VOXEL_LIMIT;
 
   return {
+    setRange(radius, max = VOXEL_LIMIT) {
+      range = radius;
+      limit = max;
+    },
     setStyle({ color, opacity }) {
       material.color.set(color);
       material.opacity = opacity;
@@ -128,7 +140,7 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
         mesh = null;
       }
       if (grid) {
-        const voxels = grid.solidVoxelsNear(center.x, center.y, center.z, VOXEL_RADIUS * grid.resolution, VOXEL_LIMIT);
+        const voxels = grid.solidVoxelsNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit);
         const size = grid.resolution * 0.9;
         mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size, size, size), material, Math.max(voxels.length, 1));
         mesh.count = voxels.length;
