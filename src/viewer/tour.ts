@@ -84,6 +84,8 @@ const WHEEL_MAX_QUEUE = 1.5;
 const WHEEL_EASE_RATE = 15;
 /** Mouse wheel: below this the rest is walked in one go (world units). */
 const WHEEL_SNAP = 0.005;
+/** At most this many ?debug=1 voxels are drawn (the nearest). */
+const VOXEL_OVERLAY_LIMIT = 400_000;
 /** The far-away pearls wiggle for a moment this often (ms): a few frames, so a still view stays mostly asleep. */
 const WIGGLE_PERIOD_MS = 5000;
 
@@ -165,6 +167,7 @@ export async function startTour({
       moveMode.setMode(walker.isEnabled() ? "walk" : "fly");
       updateWalkControls();
       showVoxels = settings.showVoxels;
+      voxelRange = settings.voxelRange;
       voxelCenter = null;
       if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
       loop.invalidate();
@@ -242,6 +245,8 @@ export async function startTour({
   let showVoxels = false;
   // Scene-local point the shown voxels are around, refreshed as the camera moves.
   let voxelCenter: THREE.Vector3 | null = null;
+  // How far around the camera the ?debug=1 voxels are shown (m).
+  let voxelRange = 10;
   let lastTick = performance.now();
   const raycaster = new THREE.Raycaster();
   // Clicking (tapping) a spot to go there: walking along the floor, or a
@@ -964,9 +969,13 @@ export async function startTour({
   // Redraws the voxels near the camera once it has moved a few voxels away.
   function updateVoxelOverlay(): void {
     const center = splatView.root.worldToLocal(camera.position.clone());
-    if (voxelCenter && voxelCenter.distanceTo(center) < 0.5) return;
-    voxelCenter = center;
-    voxelOverlay.show(walker.grid(), center);
+    // The range is in m; a wide one is redrawn less often (a fifth of it).
+    const radius = voxelRange / (splatView.root.scale.x || 1);
+    if (!voxelCenter || voxelCenter.distanceTo(center) >= Math.max(0.5, radius / 5)) {
+      voxelCenter = center;
+      voxelOverlay.setRange(radius, VOXEL_OVERLAY_LIMIT);
+      voxelOverlay.show(walker.grid(), center);
+    }
     const ground = walker.groundAt(camera.position);
     debug.showWalkInfo(
       ground === null ? "足元に床が見つかりません" : `足元の床 y=${ground.toFixed(2)}（目の高さまで ${(camera.position.y - ground).toFixed(2)}）`,

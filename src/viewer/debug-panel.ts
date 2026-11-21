@@ -32,6 +32,8 @@ export interface DebugPanel {
 export interface WalkPanelSettings {
   walking: boolean;
   showVoxels: boolean;
+  /** How far around the camera voxels are shown, in world units (m). */
+  voxelRange: number;
   eyeHeight: number;
   radius: number;
   stepHeight: number;
@@ -102,6 +104,7 @@ export function setupDebugPanel(
   const walkFiles = document.getElementById("debug-walk-files") as HTMLInputElement;
   const walkOn = document.getElementById("debug-walk-on") as HTMLInputElement;
   const walkVoxels = document.getElementById("debug-walk-voxels") as HTMLInputElement;
+  const walkVoxelRange = document.getElementById("debug-walk-voxel-range") as HTMLSelectElement;
   const walkEye = document.getElementById("debug-walk-eye") as HTMLInputElement;
   const walkRadius = document.getElementById("debug-walk-radius") as HTMLInputElement;
   const walkStep = document.getElementById("debug-walk-step") as HTMLInputElement;
@@ -115,12 +118,13 @@ export function setupDebugPanel(
     handlers.onWalkSettings({
       walking: walkOn.checked,
       showVoxels: walkVoxels.checked,
+      voxelRange: Number(walkVoxelRange.value) || 10,
       eyeHeight: number(walkEye, 1.6),
       radius: number(walkRadius, 0.2),
       stepHeight: number(walkStep, 0.35),
       ignoreSpecks: walkSpecks.checked,
     });
-  for (const el of [walkOn, walkVoxels, walkEye, walkRadius, walkStep, walkSpecks]) {
+  for (const el of [walkOn, walkVoxels, walkVoxelRange, walkEye, walkRadius, walkStep, walkSpecks]) {
     el.addEventListener("change", walkSettings);
   }
   walkFiles.addEventListener("change", async () => {
