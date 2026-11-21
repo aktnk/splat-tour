@@ -40,6 +40,14 @@ export interface VoxelGrid {
   isSpeck(x: number, y: number, z: number, maxVoxels: number): boolean;
   /** Centres of solid voxels within `radius` of a scene-local point, nearest first (at most `limit`). */
   solidVoxelsNear(x: number, y: number, z: number, radius: number, limit: number): [number, number, number][];
+  /**
+   * Boxes covering the solid voxels within `radius` of a scene-local point,
+   * nearest first (at most `limit`), as [x, y, z, edge] (centre and edge,
+   * scene-local): single voxels near, and far away the blocks and larger
+   * parts of the tree that hold some, once their edge is at most `detail`
+   * times their distance (0: single voxels only).
+   */
+  boxesNear(x: number, y: number, z: number, radius: number, limit: number, detail: number): [number, number, number, number][];
 }
 
 interface VoxelMeta {
@@ -146,34 +154,44 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
       return small;
     },
     solidVoxelsNear(x, y, z, radius, limit) {
+      return this.boxesNear(x, y, z, radius, limit, 0).map(([bx, by, bz]) => [bx, by, bz]);
+    },
+    boxesNear(x, y, z, radius, limit, detail) {
       // Walks the tree, skipping subtrees outside the sphere, so a wide
-      // radius costs the voxels found rather than the space around them.
-      // Past `limit`, the nearest are kept.
+      // radius costs the boxes found rather than the space around them. A
+      // subtree whose edge is at most `detail` times its distance is one box
+      // (its blocks, then larger nodes, far away). Past `limit`, the nearest
+      // are kept.
       const cx = (-x - minX) / res;
       const cy = (-y - minY) / res;
       const cz = (z - minZ) / res;
       const r = radius / res;
       const r2 = r * r;
       const cap = limit * 4;
-      const found: number[] = []; // ix, iy, iz, squared distance
-      const dist2 = (ix: number, iy: number, iz: number) => (ix + 0.5 - cx) ** 2 + (iy + 0.5 - cy) ** 2 + (iz + 0.5 - cz) ** 2;
-      const emit = (ix: number, iy: number, iz: number) => {
-        const d = dist2(ix, iy, iz);
-        if (d <= r2) found.push(ix, iy, iz, d);
+      const found: number[] = []; // ix, iy, iz (lowest corner), edge, squared distance (all in voxels)
+      const emit = (ix: number, iy: number, iz: number, n: number) => {
+        const d = (ix + n / 2 - cx) ** 2 + (iy + n / 2 - cy) ** 2 + (iz + n / 2 - cz) ** 2;
+        if (d <= r2) found.push(ix, iy, iz, n, d);
       };
-      // Whether the cube of `n` voxels from (ox, oy, oz) reaches into the sphere.
-      const touches = (ox: number, oy: number, oz: number, n: number) => {
+      // Squared distance from the centre to the cube of `n` voxels from (ox, oy, oz).
+      const reach = (ox: number, oy: number, oz: number, n: number) => {
         const dx = Math.max(ox - cx, 0, cx - (ox + n));
         const dy = Math.max(oy - cy, 0, cy - (oy + n));
         const dz = Math.max(oz - cz, 0, cz - (oz + n));
-        return dx * dx + dy * dy + dz * dz <= r2;
+        return dx * dx + dy * dy + dz * dz;
       };
       const visit = (word: number, level: number, bx: number, by: number, bz: number) => {
         const n = 4 << level;
         const ox = bx * 4;
         const oy = by * 4;
         const oz = bz * 4;
-        if (found.length >= cap * 4 || !touches(ox, oy, oz, n)) return;
+        if (found.length >= cap * 5) return;
+        const near = reach(ox, oy, oz, n);
+        if (near > r2) return;
+        if (detail > 0 && n * n <= near * detail * detail) {
+          emit(ox, oy, oz, n);
+          return;
+        }
         if (word === SOLID) {
           const x0 = Math.max(ox, Math.floor(cx - r));
           const y0 = Math.max(oy, Math.floor(cy - r));
@@ -181,14 +199,14 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
           const x1 = Math.min(ox + n, Math.ceil(cx + r));
           const y1 = Math.min(oy + n, Math.ceil(cy + r));
           const z1 = Math.min(oz + n, Math.ceil(cz + r));
-          for (let i = x0; i < x1; i++) for (let j = y0; j < y1; j++) for (let k = z0; k < z1; k++) emit(i, j, k);
+          for (let i = x0; i < x1; i++) for (let j = y0; j < y1; j++) for (let k = z0; k < z1; k++) emit(i, j, k, 1);
           return;
         }
         if (level === 0) {
           const leaf = (word & 0xffffff) * 2;
           for (let bit = 0; bit < 64; bit++) {
             const solid = bit < 32 ? (leaves[leaf] >>> bit) & 1 : (leaves[leaf + 1] >>> (bit - 32)) & 1;
-            if (solid) emit(ox + (bit & 3), oy + ((bit >> 2) & 3), oz + ((bit >> 4) & 3));
+            if (solid) emit(ox + (bit & 3), oy + ((bit >> 2) & 3), oz + ((bit >> 4) & 3), 1);
           }
           return;
         }
@@ -209,15 +227,19 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
       };
       if (nodes.length > 0) visit(nodes[0], depth, 0, 0, 0);
       // Nearest first (an overlay drawn in this order shows only the front layer), at most `limit`.
-      const order = Array.from({ length: found.length / 4 }, (_, i) => i)
-        .sort((a, b) => found[a * 4 + 3] - found[b * 4 + 3])
+      const order = Array.from({ length: found.length / 5 }, (_, i) => i)
+        .sort((a, b) => found[a * 5 + 4] - found[b * 5 + 4])
         .slice(0, limit);
-      // Back to scene-local coordinates.
-      return order.map((i) => [
-        -(minX + (found[i * 4] + 0.5) * res),
-        -(minY + (found[i * 4 + 1] + 0.5) * res),
-        minZ + (found[i * 4 + 2] + 0.5) * res,
-      ]);
+      // Back to scene-local coordinates (centres; the frame is turned 180° about Z).
+      return order.map((i) => {
+        const n = found[i * 5 + 3];
+        return [
+          -(minX + (found[i * 5] + n / 2) * res),
+          -(minY + (found[i * 5 + 1] + n / 2) * res),
+          minZ + (found[i * 5 + 2] + n / 2) * res,
+          n * res,
+        ];
+      });
     },
   };
 }

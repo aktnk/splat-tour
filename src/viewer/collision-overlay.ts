@@ -100,7 +100,7 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
 export interface VoxelOverlay {
   /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
   show(grid: VoxelGrid | null, center: THREE.Vector3): void;
-  /** Colour (e.g. 0xffffff) and opacity (0-1) of the boxes; orange at 0.2 by default. */
+  /** Colour (e.g. 0xffffff) and opacity (0-1, of the box edges; their faces a third of it) of the boxes; orange at 0.45 by default. */
   setStyle(style: { color: number; opacity: number }): void;
   /**
    * How far around the point voxels are shown (scene-local units) and at
@@ -112,6 +112,42 @@ export interface VoxelOverlay {
 
 const VOXEL_RADIUS = 30; // in voxels around the camera
 const VOXEL_LIMIT = 60000;
+// Far away, parts of the tree are drawn as one box once their edge is at most
+// this times their distance (40 cm blocks of 10 cm voxels from about 13 m).
+const VOXEL_DETAIL = 0.03;
+// Brightness by face (+x, -x, +y, -y, +z, -z): lit from above, so boxes read
+// as boxes even where only the front layer shows.
+const FACE_SHADES = [0.78, 0.7, 1, 0.5, 0.88, 0.62];
+
+/**
+ * Each face drawn as a frame: its edges at full strength, its inside at a
+ * third, so every box stays visible as a box while the scene shows through.
+ */
+function frameTexture(): THREE.CanvasTexture | null {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "rgba(255,255,255,1)";
+  ctx.fillRect(0, 0, size, size);
+  ctx.clearRect(3, 3, size - 6, size - 6);
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.fillRect(3, 3, size - 6, size - 6);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** A unit cube whose faces are shaded by direction (vertex colours). */
+function shadedCube(): THREE.BoxGeometry {
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const colors: number[] = [];
+  // BoxGeometry has 4 vertices per face, in the face order above.
+  for (const shade of FACE_SHADES) for (let v = 0; v < 4; v++) colors.push(shade, shade, shade);
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geometry;
+}
 
 // ?debug=1: the solid voxels near the camera as small boxes, to compare the
 // voxel data the walking mode uses with the scene and the collision mesh.
@@ -119,7 +155,15 @@ const VOXEL_LIMIT = 60000;
 // see-through layer over the splats, which write no depth); stacked layers
 // of a wide range would hide the scene behind them.
 export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): VoxelOverlay {
-  const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.2, depthWrite: true });
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xff9a3c,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: true,
+    vertexColors: true,
+    map: frameTexture(),
+  });
+  const cube = shadedCube();
   let mesh: THREE.InstancedMesh | null = null;
   const matrix = new THREE.Matrix4();
   let range: number | null = null;
@@ -138,16 +182,18 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
     show(grid, center) {
       if (mesh) {
         root.remove(mesh);
-        mesh.geometry.dispose();
         mesh.dispose();
         mesh = null;
       }
       if (grid) {
-        const voxels = grid.solidVoxelsNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit);
-        const size = grid.resolution * 0.9;
-        mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size, size, size), material, Math.max(voxels.length, 1));
-        mesh.count = voxels.length;
-        voxels.forEach(([x, y, z], i) => mesh?.setMatrixAt(i, matrix.makeTranslation(x, y, z)));
+        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, VOXEL_DETAIL);
+        mesh = new THREE.InstancedMesh(cube, material, Math.max(boxes.length, 1));
+        mesh.count = boxes.length;
+        // A little smaller than the voxel, so neighbours stay apart.
+        boxes.forEach(([x, y, z, edge], i) => {
+          const size = edge - grid.resolution * 0.1;
+          mesh?.setMatrixAt(i, matrix.makeScale(size, size, size).setPosition(x, y, z));
+        });
         mesh.renderOrder = 1000;
         mesh.raycast = () => {};
         root.add(mesh);

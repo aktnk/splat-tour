@@ -34,7 +34,7 @@ export interface WalkPanelSettings {
   showVoxels: boolean;
   /** How far around the camera voxels are shown, in world units (m). */
   voxelRange: number;
-  /** Opacity of the shown voxels (0-1). */
+  /** Opacity of the shown voxels' edges (0-1; their faces a third of it). */
   voxelOpacity: number;
   eyeHeight: number;
   radius: number;
@@ -122,7 +122,7 @@ export function setupDebugPanel(
       walking: walkOn.checked,
       showVoxels: walkVoxels.checked,
       voxelRange: Number(walkVoxelRange.value) || 10,
-      voxelOpacity: Number(walkVoxelOpacity.value) || 0.2,
+      voxelOpacity: Number(walkVoxelOpacity.value) || 0.45,
       eyeHeight: number(walkEye, 1.6),
       radius: number(walkRadius, 0.2),
       stepHeight: number(walkStep, 0.35),
