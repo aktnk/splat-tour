@@ -604,3 +604,8 @@ body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #
   color: var(--muted);
   letter-spacing: 0.05em;
 }
+
+/* ?debug=1 "歩いてみる": the floor, then what the voxel overlay shows. */
+#debug-walk-info {
+  white-space: pre-line;
+}

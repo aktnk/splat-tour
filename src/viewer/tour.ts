@@ -171,7 +171,10 @@ export async function startTour({
       voxelRange = settings.voxelRange;
       voxelOverlay.setStyle({ color: VOXEL_OVERLAY_COLOR, opacity: settings.voxelOpacity });
       voxelCenter = null;
-      if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
+      if (!showVoxels) {
+        voxelOverlay.show(null, new THREE.Vector3());
+        voxelSummary = "";
+      }
       loop.invalidate();
     },
   });
@@ -249,6 +252,8 @@ export async function startTour({
   let voxelCenter: THREE.Vector3 | null = null;
   // How far around the camera the ?debug=1 voxels are shown (m).
   let voxelRange = 10;
+  // The last drawn voxels, for the debug panel.
+  let voxelSummary = "";
   let lastTick = performance.now();
   const raycaster = new THREE.Raycaster();
   // Clicking (tapping) a spot to go there: walking along the floor, or a
@@ -973,14 +978,23 @@ export async function startTour({
     const center = splatView.root.worldToLocal(camera.position.clone());
     // The range is in m; a wide one is redrawn less often (a fifth of it).
     const radius = voxelRange / (splatView.root.scale.x || 1);
+    const grid = walker.grid();
     if (!voxelCenter || voxelCenter.distanceTo(center) >= Math.max(0.5, radius / 5)) {
       voxelCenter = center;
       voxelOverlay.setRange(radius, VOXEL_OVERLAY_LIMIT);
-      voxelOverlay.show(walker.grid(), center);
+      const shown = voxelOverlay.show(grid, center);
+      // What is drawn, and how big the voxel data is (in m), to tell a short range from short data.
+      const scale = splatView.root.scale.x || 1;
+      voxelSummary = grid
+        ? `ボクセル ${shown.boxes.toLocaleString()} 個を表示（最も遠いもの ${(shown.farthest * scale).toFixed(1)} m${
+            shown.boxes >= VOXEL_OVERLAY_LIMIT ? "、上限に達しています" : ""
+          }）。データの大きさ ${grid.extent.map((v) => (v * scale).toFixed(1)).join(" × ")} m`
+        : "";
     }
     const ground = walker.groundAt(camera.position);
     debug.showWalkInfo(
-      ground === null ? "足元に床が見つかりません" : `足元の床 y=${ground.toFixed(2)}（目の高さまで ${(camera.position.y - ground).toFixed(2)}）`,
+      (ground === null ? "足元に床が見つかりません" : `足元の床 y=${ground.toFixed(2)}（目の高さまで ${(camera.position.y - ground).toFixed(2)}）`) +
+        (voxelSummary ? `\n${voxelSummary}` : ""),
     );
   }
 

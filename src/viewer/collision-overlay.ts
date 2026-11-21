@@ -98,8 +98,11 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
 }
 
 export interface VoxelOverlay {
-  /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
-  show(grid: VoxelGrid | null, center: THREE.Vector3): void;
+  /**
+   * Shows the solid voxels around a scene-local point, or nothing with a null
+   * grid; returns how many boxes it drew and how far the farthest is (scene-local).
+   */
+  show(grid: VoxelGrid | null, center: THREE.Vector3): { boxes: number; farthest: number };
   /** Colour (e.g. 0xffffff) and opacity (0-1, of the box edges; their faces a third of it) of the boxes; orange at 0.45 by default. */
   setStyle(style: { color: number; opacity: number }): void;
   /**
@@ -185,6 +188,8 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
         mesh.dispose();
         mesh = null;
       }
+      let farthest = 0;
+      let count = 0;
       if (grid) {
         const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, VOXEL_DETAIL);
         mesh = new THREE.InstancedMesh(cube, material, Math.max(boxes.length, 1));
@@ -194,11 +199,16 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
           const size = edge - grid.resolution * 0.1;
           mesh?.setMatrixAt(i, matrix.makeScale(size, size, size).setPosition(x, y, z));
         });
+        count = boxes.length;
+        // Nearest first: the last is the farthest.
+        const last = boxes[boxes.length - 1];
+        if (last) farthest = Math.hypot(last[0] - center.x, last[1] - center.y, last[2] - center.z);
         mesh.renderOrder = 1000;
         mesh.raycast = () => {};
         root.add(mesh);
       }
       onChange();
+      return { boxes: count, farthest };
     },
   };
 }

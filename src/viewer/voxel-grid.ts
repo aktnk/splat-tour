@@ -31,6 +31,8 @@ const KEY_SPAN = 1 << 15;
 export interface VoxelGrid {
   /** Voxel edge length in scene-local units. */
   resolution: number;
+  /** Size of what the voxels cover (scene-local units, x y z), from the file's sceneBounds (else its grid). */
+  extent: [number, number, number];
   /** Whether the scene-local point lies in a solid voxel. */
   isSolid(x: number, y: number, z: number): boolean;
   /**
@@ -52,7 +54,8 @@ export interface VoxelGrid {
 
 interface VoxelMeta {
   version: string;
-  gridBounds: { min: number[] };
+  gridBounds: { min: number[]; max?: number[] };
+  sceneBounds?: { min: number[]; max: number[] };
   voxelResolution: number;
   leafSize: number;
   treeDepth: number;
@@ -119,8 +122,14 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
   const iy = (y: number) => Math.floor((-y - minY) / res);
   const iz = (z: number) => Math.floor((z - minZ) / res);
 
+  const covered = meta.sceneBounds ?? (meta.gridBounds.max ? { min: meta.gridBounds.min, max: meta.gridBounds.max } : null);
+  const extent: [number, number, number] = covered
+    ? [0, 1, 2].map((a) => Math.abs(covered.max[a] - covered.min[a])) as [number, number, number]
+    : [size * res, size * res, size * res];
+
   return {
     resolution: res,
+    extent,
     isSolid(x, y, z) {
       return solidAt(ix(x), iy(y), iz(z));
     },
