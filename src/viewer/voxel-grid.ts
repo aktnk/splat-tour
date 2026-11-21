@@ -38,7 +38,7 @@ export interface VoxelGrid {
    * (at most `maxVoxels` connected through faces), e.g. a floater.
    */
   isSpeck(x: number, y: number, z: number, maxVoxels: number): boolean;
-  /** Centres of solid voxels within `radius` of a scene-local point (at most `limit`, the nearest). */
+  /** Centres of solid voxels within `radius` of a scene-local point, nearest first (at most `limit`). */
   solidVoxelsNear(x: number, y: number, z: number, radius: number, limit: number): [number, number, number][];
 }
 
@@ -208,8 +208,10 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
         }
       };
       if (nodes.length > 0) visit(nodes[0], depth, 0, 0, 0);
-      let order = Array.from({ length: found.length / 4 }, (_, i) => i);
-      if (order.length > limit) order = order.sort((a, b) => found[a * 4 + 3] - found[b * 4 + 3]).slice(0, limit);
+      // Nearest first (an overlay drawn in this order shows only the front layer), at most `limit`.
+      const order = Array.from({ length: found.length / 4 }, (_, i) => i)
+        .sort((a, b) => found[a * 4 + 3] - found[b * 4 + 3])
+        .slice(0, limit);
       // Back to scene-local coordinates.
       return order.map((i) => [
         -(minX + (found[i * 4] + 0.5) * res),

@@ -34,6 +34,8 @@ export interface WalkPanelSettings {
   showVoxels: boolean;
   /** How far around the camera voxels are shown, in world units (m). */
   voxelRange: number;
+  /** Opacity of the shown voxels (0-1). */
+  voxelOpacity: number;
   eyeHeight: number;
   radius: number;
   stepHeight: number;
@@ -105,6 +107,7 @@ export function setupDebugPanel(
   const walkOn = document.getElementById("debug-walk-on") as HTMLInputElement;
   const walkVoxels = document.getElementById("debug-walk-voxels") as HTMLInputElement;
   const walkVoxelRange = document.getElementById("debug-walk-voxel-range") as HTMLSelectElement;
+  const walkVoxelOpacity = document.getElementById("debug-walk-voxel-opacity") as HTMLSelectElement;
   const walkEye = document.getElementById("debug-walk-eye") as HTMLInputElement;
   const walkRadius = document.getElementById("debug-walk-radius") as HTMLInputElement;
   const walkStep = document.getElementById("debug-walk-step") as HTMLInputElement;
@@ -119,12 +122,13 @@ export function setupDebugPanel(
       walking: walkOn.checked,
       showVoxels: walkVoxels.checked,
       voxelRange: Number(walkVoxelRange.value) || 10,
+      voxelOpacity: Number(walkVoxelOpacity.value) || 0.2,
       eyeHeight: number(walkEye, 1.6),
       radius: number(walkRadius, 0.2),
       stepHeight: number(walkStep, 0.35),
       ignoreSpecks: walkSpecks.checked,
     });
-  for (const el of [walkOn, walkVoxels, walkVoxelRange, walkEye, walkRadius, walkStep, walkSpecks]) {
+  for (const el of [walkOn, walkVoxels, walkVoxelRange, walkVoxelOpacity, walkEye, walkRadius, walkStep, walkSpecks]) {
     el.addEventListener("change", walkSettings);
   }
   walkFiles.addEventListener("change", async () => {

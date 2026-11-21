@@ -100,7 +100,7 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
 export interface VoxelOverlay {
   /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
   show(grid: VoxelGrid | null, center: THREE.Vector3): void;
-  /** Colour (e.g. 0xffffff) and opacity (0-1) of the boxes; orange at 0.35 by default. */
+  /** Colour (e.g. 0xffffff) and opacity (0-1) of the boxes; orange at 0.2 by default. */
   setStyle(style: { color: number; opacity: number }): void;
   /**
    * How far around the point voxels are shown (scene-local units) and at
@@ -115,8 +115,11 @@ const VOXEL_LIMIT = 60000;
 
 // ?debug=1: the solid voxels near the camera as small boxes, to compare the
 // voxel data the walking mode uses with the scene and the collision mesh.
+// Drawn nearest first with depth written, so only the front layer shows (one
+// see-through layer over the splats, which write no depth); stacked layers
+// of a wide range would hide the scene behind them.
 export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): VoxelOverlay {
-  const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.35, depthWrite: false });
+  const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.2, depthWrite: true });
   let mesh: THREE.InstancedMesh | null = null;
   const matrix = new THREE.Matrix4();
   let range: number | null = null;

@@ -86,6 +86,7 @@ const WHEEL_EASE_RATE = 15;
 const WHEEL_SNAP = 0.005;
 /** At most this many ?debug=1 voxels are drawn (the nearest). */
 const VOXEL_OVERLAY_LIMIT = 400_000;
+const VOXEL_OVERLAY_COLOR = 0xff9a3c;
 /** The far-away pearls wiggle for a moment this often (ms): a few frames, so a still view stays mostly asleep. */
 const WIGGLE_PERIOD_MS = 5000;
 
@@ -168,6 +169,7 @@ export async function startTour({
       updateWalkControls();
       showVoxels = settings.showVoxels;
       voxelRange = settings.voxelRange;
+      voxelOverlay.setStyle({ color: VOXEL_OVERLAY_COLOR, opacity: settings.voxelOpacity });
       voxelCenter = null;
       if (!showVoxels) voxelOverlay.show(null, new THREE.Vector3());
       loop.invalidate();
