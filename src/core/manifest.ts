@@ -121,9 +121,10 @@ export interface Boundary {
 
 /**
  * A plate covering a hole in the scan (a roof, a floor, the canopy of a
- * wood): a flat polygon through points on the hole's rim (scene-local; at
- * least three, in order around it), fitted to a plane. It is solid like the
- * scanned surfaces: walked on, bumped into, and flown against.
+ * wood): a surface through points on the hole's rim (scene-local; at least
+ * three, in order around it), made of triangles between them, so it passes
+ * through each point at its own height. It is solid like the scanned
+ * surfaces: walked on, bumped into, and flown against.
  */
 export interface Plate {
   points: Vec3[];
