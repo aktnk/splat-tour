@@ -31,6 +31,7 @@ import { setupWalker, type WalkOptions } from "./walk";
 import { setupClickMoveSwitch, setupEyeLevelSwitch, setupMoveModeSwitch } from "./move-mode";
 import { setupSettingsPanel } from "./settings-panel";
 import { setupBarriers } from "./barriers";
+import { setupBoundary } from "./boundary";
 import { setupSidebar } from "./sidebar";
 import { setupSceneTransition } from "./scene-transition";
 import { setupPrefetch } from "./prefetch";
@@ -145,7 +146,10 @@ export async function startTour({
   const markers = setupEntranceMarkers(splatView.root, { renderer });
   // Invisible walls at entrances (drawn with ?debug=1).
   const barriers = setupBarriers(scene);
+  // The outer boundary (an outline drawn on the ground): a wall of no height limit.
+  const boundary = setupBoundary(scene);
   barriers.setVisible(debugEnabled);
+  boundary.setVisible(debugEnabled);
   const meshScreen = setupMeshScreen(canvas, renderer);
   const debug = setupDebugPanel(debugEnabled, {
     onAlignStart: () => {
@@ -189,7 +193,8 @@ export async function startTour({
   // Walking: the scene's walk settings, or voxels tried with ?debug=1 "歩いてみる".
   const walker = setupWalker({ eyeHeight: 1.6, radius: 0.2, stepHeight: 0.35, jumpHeight: JUMP_HEIGHT, ignoreSpecks: true });
   // The invisible walls stop the walking body as the scan's voxels do.
-  walker.setBodyObstacle((x, y, z) => barriers.bodyBlocked(x, y, z));
+  // ...and so does the outer boundary.
+  walker.setBodyObstacle((x, y, z) => barriers.bodyBlocked(x, y, z) || boundary.outside(x, z));
   // The walking settings in use (the scene's, or the debug panel's), before the eye level applies.
   let walkBase: (WalkOptions & { childEyeHeight: number }) | null = null;
   const moveMode = setupMoveModeSwitch((mode) => {
@@ -457,6 +462,7 @@ export async function startTour({
       markers.setGround(null);
       barriers.setScene(null, splatView.root);
       barriers.setGround(null);
+      boundary.setScene(null, splatView.root);
       collisionOverlay.clear();
       walker.setGrid(null, null);
       walkBase = null;
@@ -484,6 +490,7 @@ export async function startTour({
         current.transform.scale,
       );
       barriers.setScene(current, splatView.root);
+      boundary.setScene(current, splatView.root);
       if (current.walk) void loadWalk(current);
     } catch (err) {
       transition.reveal();
@@ -779,8 +786,9 @@ export async function startTour({
       const length = along.length();
       if (length <= CLICK_FLY_STOP + 0.1) return;
       const end = camera.position.clone().addScaledVector(along, (length - CLICK_FLY_STOP) / length);
-      // Not through an invisible wall.
+      // Not through an invisible wall, nor out of the boundary.
       barriers.constrain(camera.position.clone(), end);
+      boundary.constrain(end);
       floorCursor.set(null);
       glideTo({
         position: splatView.toLocal(end),
@@ -906,7 +914,12 @@ export async function startTour({
       controls.update(camera);
       splatView.clampCamera(current.bounds);
       // Walking meets the walls as part of the collision (walk.ts); flying, as unlimited walls.
-      if (!walker.isEnabled()) barriers.constrain(previous, camera.position);
+      if (!walker.isEnabled()) {
+        // Flying stops at the scan's voxels too (where the scene has them), and at the boundary.
+        walker.flyConstrain(previous, camera.position);
+        barriers.constrain(previous, camera.position);
+        boundary.constrain(camera.position);
+      }
       settling = walker.constrain(camera, previous, dt);
       if (walker.isEnabled() && walker.blocked() !== shownBlock) showBlock(walker.blocked());
       if (autoWalk && clickStep > 0) {

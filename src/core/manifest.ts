@@ -110,6 +110,15 @@ export const DEFAULT_BARRIER_WIDTH = 2;
 /** Wall height when the manifest does not give one: well above a jump. */
 export const DEFAULT_WALL_HEIGHT = 3;
 
+/**
+ * The outer boundary of a scene: an outline through points on the ground
+ * (scene-local; at least three), standing as a wall of no height limit that
+ * neither walking nor flying passes, e.g. around an outdoor capture.
+ */
+export interface Boundary {
+  points: Vec3[];
+}
+
 /** Axis-aligned box in scene-local coordinates that the camera cannot leave. */
 export interface Bounds {
   min: Vec3;
@@ -145,6 +154,8 @@ export interface Scene {
   camera: CameraSettings;
   initialView: View;
   bounds?: Bounds;
+  /** The outer boundary (an outline drawn on the ground), e.g. outdoors. */
+  boundary?: Boundary;
   walk?: WalkSettings;
   /**
    * Invisible walls placed freely, e.g. across a gap in a scanned wall that
@@ -264,6 +275,12 @@ function bounds(value: unknown, path: string): Bounds {
     min: [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.min(a[2], c[2])],
     max: [Math.max(a[0], c[0]), Math.max(a[1], c[1]), Math.max(a[2], c[2])],
   };
+}
+
+function boundary(value: unknown, path: string): Boundary {
+  const a = obj(value, path);
+  if (!Array.isArray(a.points) || a.points.length < 3) fail(`${path}.points`, "3点以上の座標の配列である必要があります");
+  return { points: a.points.map((p: unknown, i: number) => vec3(p, `${path}.points[${i}]`)) };
 }
 
 function walk(value: unknown, path: string): WalkSettings {
@@ -401,6 +418,7 @@ function scene(value: unknown, path: string): Scene {
         ? { position: [0, 0, 0], yaw: 0, pitch: 0 }
         : view(s.initialView, `${path}.initialView`),
     bounds: s.bounds === undefined ? undefined : bounds(s.bounds, `${path}.bounds`),
+    boundary: s.boundary === undefined ? undefined : boundary(s.boundary, `${path}.boundary`),
     walk: s.walk === undefined ? undefined : walk(s.walk, `${path}.walk`),
     walls: wallLines(s.walls, `${path}.walls`),
     entrances: entrances.map((e, i) => entrance(e, `${path}.entrances[${i}]`)),
@@ -500,13 +518,14 @@ export function entranceThumbnail(entrance: Entrance): string | undefined {
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["version", "title", "startSceneId", "assetBaseUrl", "scenes"],
-  scene: ["id", "title", "splat", "transform", "render", "camera", "initialView", "bounds", "walk", "walls", "entrances"],
+  scene: ["id", "title", "splat", "transform", "render", "camera", "initialView", "bounds", "boundary", "walk", "walls", "entrances"],
   splat: ["url", "paged"],
   transform: ["rotation", "flipX", "flipY", "flipZ", "scale"],
   render: ["exposure", "focalAdjustment"],
   camera: ["moveSpeed", "fov"],
   view: ["position", "yaw", "pitch"],
   bounds: ["min", "max"],
+  boundary: ["points"],
   walk: ["voxels", "eyeHeight", "childEyeHeight", "radius", "stepHeight", "jumpHeight", "start"],
   wall: ["points", "height"],
   entrance: ["id", "position", "kind", "title", "description", "thumbnail", "image", "autoThumbnail", "preview", "target", "barrier"],
@@ -571,7 +590,7 @@ export function manifestWarnings(value: unknown): string[] {
     (s, sp) => {
       check(s, "scene", sp);
       if (!isObject(s)) return;
-      for (const kind of ["splat", "transform", "render", "camera", "bounds", "walk"] as const) check(s[kind], kind, `${sp}.${kind}`);
+      for (const kind of ["splat", "transform", "render", "camera", "bounds", "boundary", "walk"] as const) check(s[kind], kind, `${sp}.${kind}`);
       check(s.initialView, "view", `${sp}.initialView`);
       each(s.walls, (w, wp) => check(w, "wall", wp), `${sp}.walls`);
       each(
