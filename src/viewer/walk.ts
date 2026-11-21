@@ -140,6 +140,14 @@ const SPECK_SIZE = 0.3;
 const MIN_CROUCH = 0.6;
 /** Space kept between the eyes and a ceiling, in voxels. */
 const HEAD_CLEARANCE_VOXELS = 1;
+/**
+ * Pushing into a wall closer to head-on than this (the sine of the angle
+ * between the move and the wall) stands still instead of sliding: there is
+ * no side to go, and creeping one way and snapping back the other shakes the view.
+ */
+const HEAD_ON_SINE = Math.sin((12 * Math.PI) / 180);
+/** What was hit counts as on one side of the step only this far off its line (share of the body's radius). */
+const SIDE_HIT = 0.5;
 /** Turns tried when a step is blocked, smallest first (radians). */
 const SLIDE_ANGLES = [10, 20, 30, 40, 50, 60, 70, 80, 90].map((deg) => (deg * Math.PI) / 180);
 /** How far a slide may back off from what it hit, in voxels. */
@@ -178,6 +186,8 @@ export function setupWalker(initial: WalkOptions): Walker {
   const placed = new THREE.Vector3();
   // Which way the last slide turned (1 or -1).
   let slideSide = 1;
+  // The last frame's sideways move along something hit (world xz), to keep the next from going back.
+  const lastSlide = new THREE.Vector2();
   // Places tried this frame, and how deep the body is stuck where it stands (null: not stuck).
   let checks = 0;
   let stuckDepth: number | null = null;
@@ -311,12 +321,19 @@ export function setupWalker(initial: WalkOptions): Walker {
     ground: number,
     hit: WalkBlock | null,
   ): [number, number, Stand] | null {
-    // Turn away from what was hit (it is on one side of the step), else
-    // the way the last slide went.
+    // Turn away from what was hit when it is clearly on one side of the
+    // step, else the way the last slide went: a hit point that wanders from
+    // side to side over a staircase of voxels must not flip the slide each
+    // frame (the view would shake).
     let preferred = slideSide;
-    if (hit) {
-      const cross = sx * (hit.point.z - z) - sz * (hit.point.x - x);
-      if (Math.abs(cross) > 1e-9) preferred = cross < 0 ? 1 : -1;
+    let sideKnown = false;
+    const stepLength = Math.hypot(sx, sz);
+    if (hit && stepLength > 1e-9) {
+      const across = (sx * (hit.point.z - z) - sz * (hit.point.x - x)) / stepLength;
+      if (Math.abs(across) > options.radius * SIDE_HIT) {
+        preferred = across < 0 ? 1 : -1;
+        sideKnown = true;
+      }
     }
     if (hit?.reason === "body") {
       let [nx, nz] = surfaceNormal(hit.point);
@@ -327,15 +344,21 @@ export function setupWalker(initial: WalkOptions): Walker {
         const into = sx * nx + sz * nz;
         const tx = sx - into * nx;
         const tz = sz - into * nz;
-        // Straight into the surface there is nothing to slide along; and a
-        // slide towards what was hit (a misread tip) would only wobble.
+        // Nearly straight into the surface there is nothing to slide along:
+        // stand. Otherwise along it, unless that goes towards what was
+        // clearly hit on one side (a misread tip would only wobble).
         const turn = sx * tz - sz * tx;
-        if (into < 0 && Math.hypot(tx, tz) > Math.hypot(sx, sz) * 0.05 && turn * preferred > 0) {
+        if (into < 0 && Math.hypot(tx, tz) < stepLength * HEAD_ON_SINE) return null;
+        const side = turn > 0 ? 1 : -1;
+        if (into < 0 && (side === preferred || !sideKnown)) {
           for (const backoff of BACKOFFS) {
             const px = x + tx + nx * backoff * worldStep();
             const pz = z + tz + nz * backoff * worldStep();
             const stand = standAt(px, pz, ground);
-            if (stand !== null) return [px, pz, stand];
+            if (stand !== null) {
+              slideSide = side;
+              return [px, pz, stand];
+            }
           }
         }
       }
@@ -350,7 +373,6 @@ export function setupWalker(initial: WalkOptions): Walker {
       ax /= a;
       az /= a;
     }
-    const stepLength = Math.hypot(sx, sz);
     for (const angle of SLIDE_ANGLES) {
       // At least a little progress even when turned all the way.
       const length = Math.max(Math.cos(angle), 0.2);
@@ -710,6 +732,19 @@ export function setupWalker(initial: WalkOptions): Walker {
         if (slid === null) break;
         [x, z, next] = slid;
       }
+      // Hemmed in (a corner of walls, or a wall and a hole), the slides can
+      // go one way this frame and back the next: a shake, not a way out.
+      // A frame that slid back against the last one stands still instead.
+      if (hit !== null) {
+        const mx = x - previous.x;
+        const mz = z - previous.z;
+        if (mx * lastSlide.x + mz * lastSlide.y < 0) {
+          x = previous.x;
+          z = previous.z;
+          next = { ground, head: next.head };
+          lastSlide.set(0, 0);
+        } else lastSlide.set(mx, mz);
+      } else lastSlide.set(0, 0);
       target.x = x;
       target.z = z;
       if (air !== null) {
