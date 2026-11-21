@@ -16,4 +16,6 @@ export { setupBarriers, type Barriers } from "./barriers";
 export { setupMeshScreen, type MeshScreen } from "./mesh-screen";
 export { assertAssetAvailable } from "./asset-check";
 export { levelingRotation } from "./floor-align";
+export { parseVoxelGrid, type VoxelGrid } from "./voxel-grid";
+export { setupVoxelOverlay, type VoxelOverlay } from "./collision-overlay";
 export { captureExtension, captureFrame, PREVIEW_HEIGHT, PREVIEW_WIDTH } from "./capture";

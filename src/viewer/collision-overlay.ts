@@ -98,39 +98,121 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
 }
 
 export interface VoxelOverlay {
-  /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
-  show(grid: VoxelGrid | null, center: THREE.Vector3): void;
+  /**
+   * Shows the solid voxels around a scene-local point, or nothing with a null
+   * grid; returns how many boxes it drew and how far the farthest is (scene-local).
+   */
+  show(grid: VoxelGrid | null, center: THREE.Vector3): { boxes: number; farthest: number };
+  /** Colour (e.g. 0xffffff) and opacity (0-1, of the box edges; their faces a third of it) of the boxes; orange at 0.45 by default. */
+  setStyle(style: { color: number; opacity: number }): void;
+  /**
+   * How far around the point voxels are shown (scene-local units), at most
+   * how many (the nearest), and whether far parts are merged into larger
+   * boxes (fewer and quicker, but not all the voxels' size); null for the
+   * default, 30 voxels and 60000, unmerged. Applies from the next show().
+   */
+  setRange(radius: number | null, limit?: number, mergeFar?: boolean): void;
 }
 
 const VOXEL_RADIUS = 30; // in voxels around the camera
 const VOXEL_LIMIT = 60000;
+// With mergeFar, parts of the tree are drawn as one box once their edge is at
+// most this times their distance (40 cm blocks of 10 cm voxels from about 13 m).
+const VOXEL_DETAIL = 0.03;
+// Brightness by face (+x, -x, +y, -y, +z, -z): lit from above, so boxes read
+// as boxes even where only the front layer shows.
+const FACE_SHADES = [0.78, 0.7, 1, 0.5, 0.88, 0.62];
+
+/**
+ * Each face drawn as a frame: its edges at full strength, its inside at a
+ * third, so every box stays visible as a box while the scene shows through.
+ */
+function frameTexture(): THREE.CanvasTexture | null {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "rgba(255,255,255,1)";
+  ctx.fillRect(0, 0, size, size);
+  ctx.clearRect(3, 3, size - 6, size - 6);
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.fillRect(3, 3, size - 6, size - 6);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** A unit cube whose faces are shaded by direction (vertex colours). */
+function shadedCube(): THREE.BoxGeometry {
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const colors: number[] = [];
+  // BoxGeometry has 4 vertices per face, in the face order above.
+  for (const shade of FACE_SHADES) for (let v = 0; v < 4; v++) colors.push(shade, shade, shade);
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geometry;
+}
 
 // ?debug=1: the solid voxels near the camera as small boxes, to compare the
 // voxel data the walking mode uses with the scene and the collision mesh.
+// Drawn nearest first with depth written, so only the front layer shows (one
+// see-through layer over the splats, which write no depth); stacked layers
+// of a wide range would hide the scene behind them.
 export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): VoxelOverlay {
-  const material = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.35, depthWrite: false });
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xff9a3c,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: true,
+    vertexColors: true,
+    map: frameTexture(),
+  });
+  const cube = shadedCube();
   let mesh: THREE.InstancedMesh | null = null;
   const matrix = new THREE.Matrix4();
+  let range: number | null = null;
+  let limit = VOXEL_LIMIT;
+  let detail = 0;
 
   return {
+    setRange(radius, max = VOXEL_LIMIT, mergeFar = false) {
+      range = radius;
+      limit = max;
+      detail = mergeFar ? VOXEL_DETAIL : 0;
+    },
+    setStyle({ color, opacity }) {
+      material.color.set(color);
+      material.opacity = opacity;
+      onChange();
+    },
     show(grid, center) {
       if (mesh) {
         root.remove(mesh);
-        mesh.geometry.dispose();
         mesh.dispose();
         mesh = null;
       }
+      let farthest = 0;
+      let count = 0;
       if (grid) {
-        const voxels = grid.solidVoxelsNear(center.x, center.y, center.z, VOXEL_RADIUS * grid.resolution, VOXEL_LIMIT);
-        const size = grid.resolution * 0.9;
-        mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size, size, size), material, Math.max(voxels.length, 1));
-        mesh.count = voxels.length;
-        voxels.forEach(([x, y, z], i) => mesh?.setMatrixAt(i, matrix.makeTranslation(x, y, z)));
+        // Only the voxels on a surface: the front layer is all that shows.
+        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, detail, true);
+        mesh = new THREE.InstancedMesh(cube, material, Math.max(boxes.length, 1));
+        mesh.count = boxes.length;
+        // A little smaller than the voxel, so neighbours stay apart.
+        boxes.forEach(([x, y, z, edge], i) => {
+          const size = edge - grid.resolution * 0.1;
+          mesh?.setMatrixAt(i, matrix.makeScale(size, size, size).setPosition(x, y, z));
+        });
+        count = boxes.length;
+        // Nearest first: the last is the farthest.
+        const last = boxes[boxes.length - 1];
+        if (last) farthest = Math.hypot(last[0] - center.x, last[1] - center.y, last[2] - center.z);
         mesh.renderOrder = 1000;
         mesh.raycast = () => {};
         root.add(mesh);
       }
       onChange();
+      return { boxes: count, farthest };
     },
   };
 }

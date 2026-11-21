@@ -32,6 +32,12 @@ export interface DebugPanel {
 export interface WalkPanelSettings {
   walking: boolean;
   showVoxels: boolean;
+  /** How far around the camera voxels are shown, in world units (m). */
+  voxelRange: number;
+  /** Whether far voxels are merged into larger boxes (lighter, not all the same size). */
+  voxelMerge: boolean;
+  /** Opacity of the shown voxels' edges (0-1; their faces a third of it). */
+  voxelOpacity: number;
   eyeHeight: number;
   radius: number;
   stepHeight: number;
@@ -102,6 +108,9 @@ export function setupDebugPanel(
   const walkFiles = document.getElementById("debug-walk-files") as HTMLInputElement;
   const walkOn = document.getElementById("debug-walk-on") as HTMLInputElement;
   const walkVoxels = document.getElementById("debug-walk-voxels") as HTMLInputElement;
+  const walkVoxelRange = document.getElementById("debug-walk-voxel-range") as HTMLSelectElement;
+  const walkVoxelOpacity = document.getElementById("debug-walk-voxel-opacity") as HTMLSelectElement;
+  const walkVoxelMerge = document.getElementById("debug-walk-voxel-merge") as HTMLInputElement;
   const walkEye = document.getElementById("debug-walk-eye") as HTMLInputElement;
   const walkRadius = document.getElementById("debug-walk-radius") as HTMLInputElement;
   const walkStep = document.getElementById("debug-walk-step") as HTMLInputElement;
@@ -115,12 +124,15 @@ export function setupDebugPanel(
     handlers.onWalkSettings({
       walking: walkOn.checked,
       showVoxels: walkVoxels.checked,
+      voxelRange: Number(walkVoxelRange.value) || 10,
+      voxelOpacity: Number(walkVoxelOpacity.value) || 0.45,
+      voxelMerge: walkVoxelMerge.checked,
       eyeHeight: number(walkEye, 1.6),
       radius: number(walkRadius, 0.2),
       stepHeight: number(walkStep, 0.35),
       ignoreSpecks: walkSpecks.checked,
     });
-  for (const el of [walkOn, walkVoxels, walkEye, walkRadius, walkStep, walkSpecks]) {
+  for (const el of [walkOn, walkVoxels, walkVoxelRange, walkVoxelOpacity, walkVoxelMerge, walkEye, walkRadius, walkStep, walkSpecks]) {
     el.addEventListener("change", walkSettings);
   }
   walkFiles.addEventListener("change", async () => {
