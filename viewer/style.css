@@ -407,7 +407,7 @@ button {
 
 /* The switches: an icon, then two choices of equal width. */
 #settings-panel {
-  width: 210px;
+  width: 176px;
   padding: 4px 8px;
   border-radius: 14px;
   background: var(--panel-bg);
