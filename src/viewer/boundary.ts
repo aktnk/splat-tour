@@ -1,27 +1,30 @@
 import * as THREE from "three";
 import type { Scene } from "../core/manifest";
 
-// Where flying may go outdoors (Scene.flyArea): inside an outline drawn
-// through points on the ground, from just above the lowest of them up
-// `height`. A flight that would leave is held at the edge (sliding along
-// it), so visitors cannot drift off into the unscanned dark around an
-// outdoor capture. Walking is not limited by it (the voxels are its ground).
+// The outer boundary of a scene (Scene.boundary): an outline drawn through
+// points on the ground, standing as a wall of no height limit, so visitors
+// cannot leave the capture into its unscanned dark, walking or flying.
+// Walking, it joins the body's obstacles (walk.ts slides along it as along a
+// scanned wall); flying, a move that would leave is held at the edge,
+// sliding along it.
 //
 // The outline is taken in the horizontal plane of the world (its points go
 // through the scene root, whose rotation levels the ground), so it may be
 // any shape, not only convex.
 
-/** How far above the outline's lowest point the camera stays (world units). */
-const ABOVE_GROUND = 0.3;
 /** How far inside the outline a camera held at its edge is put (world units). */
 const INSIDE = 0.05;
+/** How tall the drawn fence is (world units above the lowest point; the wall itself has no top). */
+const DRAWN_HEIGHT = 10;
 
-export interface FlyArea {
-  /** A scene's fly area (none for null or a scene without one); call once its root has its transform. */
+export interface Boundary {
+  /** A scene's boundary (none for null or a scene without one); call once its root has its transform. */
   setScene(scene: Scene | null, root: THREE.Object3D): void;
-  /** Flying: keeps a world point inside the area; true if it moved it. */
+  /** Whether a world point is outside the outline (always false without one). */
+  outside(x: number, z: number): boolean;
+  /** Flying: keeps a world point inside the outline; true if it moved it. */
   constrain(position: THREE.Vector3): boolean;
-  /** Draws the outline at the bottom and top of the area (for ?debug=1 and the authoring tool). */
+  /** Draws the outline as a fence (for ?debug=1 and the authoring tool). */
   setVisible(visible: boolean): void;
 }
 
@@ -29,8 +32,8 @@ interface Area {
   /** The outline in world xz. */
   xs: number[];
   zs: number[];
+  /** The lowest point (world y), where the drawn fence starts. */
   bottom: number;
-  top: number;
 }
 
 /** Whether (x, z) is inside the outline (even-odd rule). */
@@ -72,10 +75,10 @@ function nearestInside(a: Area, x: number, z: number): [number, number] {
   return inside(a, candidate[0], candidate[1]) ? candidate : best;
 }
 
-export function setupFlyArea(scene: THREE.Scene): FlyArea {
+export function setupBoundary(scene: THREE.Scene): Boundary {
   let area: Area | null = null;
   const group = new THREE.Group();
-  group.name = "fly-area";
+  group.name = "boundary";
   group.visible = false;
   scene.add(group);
   const material = new THREE.LineBasicMaterial({ color: 0x4fd1ff, transparent: true, opacity: 0.8, depthTest: false });
@@ -84,14 +87,13 @@ export function setupFlyArea(scene: THREE.Scene): FlyArea {
     for (const child of group.children) (child as THREE.Line).geometry.dispose();
     group.clear();
     if (!area || !group.visible) return;
+    const a = area;
     const ring = (y: number) =>
-      new THREE.LineLoop(
-        new THREE.BufferGeometry().setFromPoints(area!.xs.map((x, i) => new THREE.Vector3(x, y, area!.zs[i]))),
-        material,
-      );
-    group.add(ring(area.bottom), ring(area.top));
+      new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(a.xs.map((x, i) => new THREE.Vector3(x, y, a.zs[i]))), material);
+    const top = a.bottom + DRAWN_HEIGHT;
+    group.add(ring(a.bottom), ring(top));
     const posts: THREE.Vector3[] = [];
-    area.xs.forEach((x, i) => posts.push(new THREE.Vector3(x, area!.bottom, area!.zs[i]), new THREE.Vector3(x, area!.top, area!.zs[i])));
+    a.xs.forEach((x, i) => posts.push(new THREE.Vector3(x, a.bottom, a.zs[i]), new THREE.Vector3(x, top, a.zs[i])));
     group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(posts), material));
     for (const child of group.children) child.renderOrder = 999;
   }
@@ -99,35 +101,23 @@ export function setupFlyArea(scene: THREE.Scene): FlyArea {
   return {
     setScene(s, root) {
       area = null;
-      const fly = s?.flyArea;
-      if (fly && fly.points.length >= 3) {
+      const outline = s?.boundary;
+      if (outline && outline.points.length >= 3) {
         root.updateMatrixWorld(true);
-        const world = fly.points.map((p) => root.localToWorld(new THREE.Vector3(...p)));
-        const bottom = Math.min(...world.map((p) => p.y));
-        area = {
-          xs: world.map((p) => p.x),
-          zs: world.map((p) => p.z),
-          bottom: bottom + ABOVE_GROUND,
-          top: bottom + fly.height,
-        };
+        const world = outline.points.map((p) => root.localToWorld(new THREE.Vector3(...p)));
+        area = { xs: world.map((p) => p.x), zs: world.map((p) => p.z), bottom: Math.min(...world.map((p) => p.y)) };
       }
       draw();
     },
+    outside(x, z) {
+      return area !== null && !inside(area, x, z);
+    },
     constrain(position) {
-      if (!area) return false;
-      let changed = false;
-      if (!inside(area, position.x, position.z)) {
-        const [x, z] = nearestInside(area, position.x, position.z);
-        position.x = x;
-        position.z = z;
-        changed = true;
-      }
-      const y = Math.min(area.top, Math.max(area.bottom, position.y));
-      if (y !== position.y) {
-        position.y = y;
-        changed = true;
-      }
-      return changed;
+      if (!area || inside(area, position.x, position.z)) return false;
+      const [x, z] = nearestInside(area, position.x, position.z);
+      position.x = x;
+      position.z = z;
+      return true;
     },
     setVisible(visible) {
       group.visible = visible;

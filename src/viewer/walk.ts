@@ -104,7 +104,21 @@ export interface Walker {
    * Returns true while the camera is still easing to its height.
    */
   constrain(camera: THREE.Camera, previous: THREE.Vector3, dt: number): boolean;
+  /**
+   * Flying in a scene with voxels: keeps a camera move (world) from going
+   * into the ground or a wall, a ball of FLY_RADIUS sliding along them (specks
+   * are flown through, as walking ignores them). True if it changed the move.
+   */
+  flyConstrain(previous: THREE.Vector3, target: THREE.Vector3): boolean;
 }
+
+/** Flying: the camera's ball against the voxels (world units). */
+const FLY_RADIUS = 0.25;
+/** Directions the flying ball is felt in (unit vectors): the axes and the diagonals. */
+const FLY_PROBES = [
+  [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+  ...[-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => [x / Math.sqrt(3), y / Math.sqrt(3), z / Math.sqrt(3)]))),
+] as const;
 
 /** How far down to look for ground when starting to walk (in eye heights). */
 const LANDING_SEARCH = 30;
@@ -474,7 +488,50 @@ export function setupWalker(initial: WalkOptions): Walker {
     return count;
   }
 
+  /** Flying: whether the camera's ball at a world point touches a voxel. */
+  function flyBlocked(x: number, y: number, z: number): boolean {
+    if (obstacle(x, y, z)) return true;
+    for (const [dx, dy, dz] of FLY_PROBES) {
+      if (obstacle(x + dx * FLY_RADIUS, y + dy * FLY_RADIUS, z + dz * FLY_RADIUS)) return true;
+    }
+    return false;
+  }
+
   const walker: Walker = {
+    flyConstrain(previous, target) {
+      if (!grid || !root) return false;
+      const total = target.clone().sub(previous);
+      const length = total.length();
+      if (length === 0) return false;
+      // Already touching something (placed there, or the scan moved under it): let it fly out.
+      if (flyBlocked(previous.x, previous.y, previous.z)) return false;
+      const steps = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(length / (worldStep() / 2))));
+      const step = total.divideScalar(steps);
+      const at = previous.clone();
+      let changed = false;
+      for (let i = 0; i < steps; i++) {
+        if (!flyBlocked(at.x + step.x, at.y + step.y, at.z + step.z)) {
+          at.add(step);
+          continue;
+        }
+        changed = true;
+        // Slide: keep whichever parts of the step stay clear (level first, then up or down).
+        let moved = false;
+        for (const [ax, ay, az] of [[1, 0, 1], [1, 0, 0], [0, 0, 1], [0, 1, 0], [1, 1, 0], [0, 1, 1]]) {
+          const nx = at.x + step.x * ax;
+          const ny = at.y + step.y * ay;
+          const nz = at.z + step.z * az;
+          if ((ax || ay || az) && !flyBlocked(nx, ny, nz)) {
+            at.set(nx, ny, nz);
+            moved = true;
+            break;
+          }
+        }
+        if (!moved) break;
+      }
+      if (changed) target.copy(at);
+      return changed;
+    },
     setGrid(g, r) {
       grid = g;
       root = r;
