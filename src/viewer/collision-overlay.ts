@@ -100,6 +100,8 @@ export function setupCollisionOverlay(root: THREE.Object3D, onChange: () => void
 export interface VoxelOverlay {
   /** Shows the solid voxels around a scene-local point, or nothing with a null grid. */
   show(grid: VoxelGrid | null, center: THREE.Vector3): void;
+  /** Colour (e.g. 0xffffff) and opacity (0-1) of the boxes; orange at 0.35 by default. */
+  setStyle(style: { color: number; opacity: number }): void;
 }
 
 const VOXEL_RADIUS = 30; // in voxels around the camera
@@ -113,6 +115,11 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
   const matrix = new THREE.Matrix4();
 
   return {
+    setStyle({ color, opacity }) {
+      material.color.set(color);
+      material.opacity = opacity;
+      onChange();
+    },
     show(grid, center) {
       if (mesh) {
         root.remove(mesh);
