@@ -395,7 +395,7 @@ button {
 }
 
 .hud-round .icon,
-.settings-icon .icon {
+.settings-row .icon {
   width: 22px;
   height: 22px;
   fill: none;
@@ -415,7 +415,7 @@ button {
 
 .settings-row {
   display: grid;
-  grid-template-columns: 32px 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 4px;
   padding: 7px 0;
@@ -425,29 +425,30 @@ button {
   border-top: 1px solid #2c303a;
 }
 
-.settings-icon {
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-}
-
-/* "歩く / 飛ぶ": a walker or a drone, as the mode. */
-#move-mode .icon-fly,
-#move-mode[data-mode="fly"] .icon-walk {
-  display: none;
-}
-
-#move-mode[data-mode="fly"] .icon-fly {
-  display: block;
-}
-
+/* Each choice: its icon, then its word. */
 .settings-row button {
-  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 0;
   border: none;
   font-size: 13px;
   border-radius: 999px;
   color: var(--muted);
   background: #22252e;
+}
+
+.settings-row .icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+/* "OFF": the mark's icon struck through. */
+.settings-row .icon-cross {
+  stroke: #ff7a7a;
+  stroke-width: 2;
 }
 
 .settings-row button[aria-pressed="true"] {

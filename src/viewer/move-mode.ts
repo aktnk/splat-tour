@@ -20,8 +20,6 @@ export function setupMoveModeSwitch(onChange: (mode: MoveMode) => void): MoveMod
     for (const button of buttons) {
       button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
     }
-    // The row's icon follows the mode (a walker or a drone).
-    el.dataset.mode = mode;
   }
 
   for (const button of buttons) {
