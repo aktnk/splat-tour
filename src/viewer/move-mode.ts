@@ -20,6 +20,8 @@ export function setupMoveModeSwitch(onChange: (mode: MoveMode) => void): MoveMod
     for (const button of buttons) {
       button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
     }
+    // The row's icon follows the mode (a walker or a drone).
+    el.dataset.mode = mode;
   }
 
   for (const button of buttons) {
@@ -48,7 +50,7 @@ export function setupMoveModeSwitch(onChange: (mode: MoveMode) => void): MoveMod
 
 export type EyeLevel = "adult" | "child";
 
-/** "大人 / 子ども" switch, shown while walking: the eye height (walk.childEyeHeight for a child). */
+/** "大人 / 子供" switch, shown while walking: the eye height (walk.childEyeHeight for a child). */
 export interface EyeLevelSwitch {
   setAvailable(available: boolean): void;
   level(): EyeLevel;
@@ -78,46 +80,58 @@ export function setupEyeLevelSwitch(onChange: (level: EyeLevel) => void): EyeLev
 }
 
 /**
- * "◯ クリックで移動" (on touch "タップで移動") toggle: whether a click or tap
- * on the floor goes there and the ring shows where. Remembered in this
- * browser (a convenience: it works without storage too).
+ * "クリックで移動" (on touch "タップで移動") ON / OFF: whether a click or tap
+ * on the floor goes there and the ring shows where. Shown while walking.
+ * Remembered in this browser (a convenience: it works without storage too).
  */
 export interface ClickMoveSwitch {
   enabled(): boolean;
+  setAvailable(available: boolean): void;
 }
 
 const CLICK_MOVE_KEY = "splat-tour:clickMove";
 
 export function setupClickMoveSwitch(onChange: (enabled: boolean) => void): ClickMoveSwitch {
-  const button = document.getElementById("click-move") as HTMLButtonElement | null;
+  const el = document.getElementById("click-move") as HTMLElement | null;
   let enabled = true;
   try {
     enabled = localStorage.getItem(CLICK_MOVE_KEY) !== "off";
   } catch {
     // No storage (private window, blocked): on, as by default.
   }
-  if (!button) return { enabled: () => enabled };
+  if (!el) return { enabled: () => enabled, setAvailable: () => {} };
+  const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button[data-on]"));
   const touch = window.matchMedia("(hover: none), (pointer: coarse)").matches;
-  const label = touch ? "タップで移動" : "クリックで移動";
+  const act = touch ? "タップ" : "クリック";
+  el.setAttribute("aria-label", `${act}で移動`);
+  for (const button of buttons) {
+    button.title =
+      button.dataset.on === "true" ? `床を${act}すると、そこへ移動します` : `床の${act}では移動しません`;
+  }
   function show(): void {
-    button!.setAttribute("aria-pressed", String(enabled));
-    button!.textContent = `◯ ${label}：${enabled ? "入" : "切"}`;
-    button!.title = enabled
-      ? `床を${touch ? "タップ" : "クリック"}すると、そこへ移動します（押すと切）`
-      : `床の${touch ? "タップ" : "クリック"}では移動しません（押すと入）`;
+    for (const b of buttons) b.setAttribute("aria-pressed", String((b.dataset.on === "true") === enabled));
   }
   show();
-  button.addEventListener("click", () => {
-    // Space jumps; it must not press this button again.
-    button.blur();
-    enabled = !enabled;
-    try {
-      localStorage.setItem(CLICK_MOVE_KEY, enabled ? "on" : "off");
-    } catch {
-      // Only a convenience.
-    }
-    show();
-    onChange(enabled);
-  });
-  return { enabled: () => enabled };
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      // Space jumps; it must not press this button again.
+      button.blur();
+      const next = button.dataset.on === "true";
+      if (next === enabled) return;
+      enabled = next;
+      try {
+        localStorage.setItem(CLICK_MOVE_KEY, enabled ? "on" : "off");
+      } catch {
+        // Only a convenience.
+      }
+      show();
+      onChange(enabled);
+    });
+  }
+  return {
+    enabled: () => enabled,
+    setAvailable(available) {
+      el.hidden = !available;
+    },
+  };
 }

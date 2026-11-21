@@ -363,70 +363,95 @@ button {
   white-space: nowrap;
 }
 
-#reset-view-btn {
+/* Bottom right: "初期位置" and the gear, with the switches it opens above them. */
+#hud {
   position: fixed;
   right: 16px;
   bottom: calc(24px + env(safe-area-inset-bottom));
-  padding: 8px 12px;
-  background: var(--panel-bg);
-  border-radius: 999px;
-  font-size: 13px;
-  z-index: 6;
-}
-
-/* "歩く / 飛ぶ", above "初期位置" (scenes with walk settings only). */
-#move-mode {
-  position: fixed;
-  right: 16px;
-  bottom: calc(68px + env(safe-area-inset-bottom));
   display: flex;
-  border: 1px solid #4a4e5a;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--panel-bg);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
   z-index: 6;
 }
 
-/* "大人 / 子ども", above "歩く / 飛ぶ" while walking. */
-#eye-level {
-  position: fixed;
-  right: 16px;
-  bottom: calc(112px + env(safe-area-inset-bottom));
+.hud-buttons {
   display: flex;
-  border: 1px solid #4a4e5a;
-  border-radius: 999px;
-  overflow: hidden;
+  gap: 10px;
+}
+
+.hud-round {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
   background: var(--panel-bg);
-  z-index: 6;
 }
 
-/* "◯ クリックで移動：入 / 切", above "大人 / 子ども". */
-#click-move {
-  position: fixed;
-  right: 16px;
-  bottom: calc(156px + env(safe-area-inset-bottom));
-  padding: 8px 12px;
-  font-size: 13px;
+.hud-round.open {
+  background: var(--accent);
+}
+
+.hud-round .icon,
+.settings-icon .icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The switches: an icon, then two choices of equal width. */
+#settings-panel {
+  width: 210px;
+  padding: 4px 8px;
+  border-radius: 14px;
   background: var(--panel-bg);
-  border-radius: 999px;
-  z-index: 6;
 }
 
-#click-move[aria-pressed="false"] {
-  color: #aab0bc;
+.settings-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 0;
 }
 
-#move-mode button,
-#eye-level button {
-  padding: 8px 12px;
-  font-size: 13px;
-  background: transparent;
+.settings-row:not([hidden]) ~ .settings-row:not([hidden]) {
+  border-top: 1px solid #2c303a;
+}
+
+.settings-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+/* "歩く / 飛ぶ": a walker or a drone, as the mode. */
+#move-mode .icon-fly,
+#move-mode[data-mode="fly"] .icon-walk {
+  display: none;
+}
+
+#move-mode[data-mode="fly"] .icon-fly {
+  display: block;
+}
+
+.settings-row button {
+  padding: 6px 0;
   border: none;
-  border-radius: 0;
+  font-size: 13px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #22252e;
 }
 
-#move-mode button[aria-pressed="true"],
-#eye-level button[aria-pressed="true"] {
+.settings-row button[aria-pressed="true"] {
+  color: #fff;
   background: var(--accent);
 }
 
@@ -498,23 +523,15 @@ button {
 }
 
 @media (hover: none), (pointer: coarse) {
-  #reset-view-btn {
+  /* Above the look stick (bottom right). */
+  #hud {
     bottom: calc(176px + env(safe-area-inset-bottom));
-  }
-  #move-mode {
-    bottom: calc(220px + env(safe-area-inset-bottom));
-  }
-  #eye-level {
-    bottom: calc(264px + env(safe-area-inset-bottom));
-  }
-  #click-move {
-    bottom: calc(308px + env(safe-area-inset-bottom));
   }
 }
 
 /* A model or web page is shown: the scene's controls are not for it. */
-body[data-screen="mesh"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level, #click-move),
-body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #move-mode, #eye-level, #click-move) {
+body[data-screen="mesh"] :is(#joystick-zone, #look-zone, #jump-btn, #settings-panel, #settings-btn),
+body[data-screen="web"] :is(#joystick-zone, #look-zone, #jump-btn, #settings-panel, #settings-btn) {
   display: none;
 }
 

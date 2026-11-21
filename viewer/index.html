@@ -30,16 +30,30 @@
       <span>読み込み中…</span>
     </div>
     <div id="error" role="alert" hidden></div>
-    <button id="reset-view-btn" type="button" title="このシーンの最初の位置に戻る">⟲ 初期位置</button>
-    <div id="move-mode" role="group" aria-label="移動のしかた" hidden>
-      <button type="button" data-mode="walk" aria-pressed="false" title="床の上を歩く（壁は通り抜けない）">歩く</button>
-      <button type="button" data-mode="fly" aria-pressed="false" title="自由に飛んで移動する">飛ぶ</button>
+    <!-- Bottom right: "初期位置" and the settings (gear), which opens the switches (settings-panel.ts). -->
+    <div id="hud">
+      <div id="settings-panel" hidden>
+        <div id="move-mode" class="settings-row" role="group" aria-label="移動のしかた" hidden>
+          <span class="settings-icon"><svg class="icon icon-walk" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M10 21l2-6 3 3v3M8 12l3-4 4 3 3 1M11 8l-1 6"/></svg><svg class="icon icon-fly" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="10" width="6" height="4" rx="1"/><path d="M9 11L5 7M15 11l4-4M9 13l-4 4M15 13l4 4"/><circle cx="5" cy="7" r="2.2"/><circle cx="19" cy="7" r="2.2"/><circle cx="5" cy="17" r="2.2"/><circle cx="19" cy="17" r="2.2"/></svg></span>
+          <button type="button" data-mode="walk" aria-pressed="false" title="床の上を歩く（壁は通り抜けない）">歩く</button>
+          <button type="button" data-mode="fly" aria-pressed="false" title="自由に飛んで移動する">飛ぶ</button>
+        </div>
+        <div id="eye-level" class="settings-row" role="group" aria-label="目の高さ" hidden>
+          <span class="settings-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2"/><path d="M12 7v8M8 10h8M12 15l-3 6M12 15l3 6"/></svg></span>
+          <button type="button" data-level="adult" aria-pressed="true" title="大人の目の高さで歩く">大人</button>
+          <button type="button" data-level="child" aria-pressed="false" title="子供の目の高さで歩く">子供</button>
+        </div>
+        <div id="click-move" class="settings-row" role="group" aria-label="クリックで移動" hidden>
+          <span class="settings-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="17" rx="7" ry="3"/><path d="M12 3v10M9 10l3 3 3-3"/></svg></span>
+          <button type="button" data-on="true" aria-pressed="true">ON</button>
+          <button type="button" data-on="false" aria-pressed="false">OFF</button>
+        </div>
+      </div>
+      <div class="hud-buttons">
+        <button id="reset-view-btn" class="hud-round" type="button" title="初期位置（このシーンの最初の位置に戻る）" aria-label="初期位置"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7M6 10v10h12V10M10 20v-5h4v5"/></svg></button>
+        <button id="settings-btn" class="hud-round" type="button" title="設定" aria-label="設定" aria-controls="settings-panel" aria-expanded="false" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+      </div>
     </div>
-    <div id="eye-level" role="group" aria-label="目の高さ" hidden>
-      <button type="button" data-level="adult" aria-pressed="true" title="大人の目の高さで歩く">大人</button>
-      <button type="button" data-level="child" aria-pressed="false" title="子どもの目の高さで歩く">子ども</button>
-    </div>
-    <button id="click-move" type="button" aria-pressed="true"></button>
     <button id="jump-btn" type="button" title="ジャンプ（Space キー）" hidden>ジャンプ</button>
 
     <div id="tooltip" hidden>
