@@ -47,9 +47,18 @@ export interface VoxelGrid {
    * nearest first (at most `limit`), as [x, y, z, edge] (centre and edge,
    * scene-local): single voxels near, and far away the blocks and larger
    * parts of the tree that hold some, once their edge is at most `detail`
-   * times their distance (0: single voxels only).
+   * times their distance (0: single voxels only). With `surface`, single
+   * voxels only where a face neighbour is empty (inner ones cannot be seen).
    */
-  boxesNear(x: number, y: number, z: number, radius: number, limit: number, detail: number): [number, number, number, number][];
+  boxesNear(
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    limit: number,
+    detail: number,
+    surface: boolean,
+  ): [number, number, number, number][];
 }
 
 interface VoxelMeta {
@@ -163,9 +172,9 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
       return small;
     },
     solidVoxelsNear(x, y, z, radius, limit) {
-      return this.boxesNear(x, y, z, radius, limit, 0).map(([bx, by, bz]) => [bx, by, bz]);
+      return this.boxesNear(x, y, z, radius, limit, 0, false).map(([bx, by, bz]) => [bx, by, bz]);
     },
-    boxesNear(x, y, z, radius, limit, detail) {
+    boxesNear(x, y, z, radius, limit, detail, surface) {
       // Walks the tree, skipping subtrees outside the sphere, so a wide
       // radius costs the boxes found rather than the space around them. A
       // subtree whose edge is at most `detail` times its distance is one box
@@ -182,6 +191,14 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
         const d = (ix + n / 2 - cx) ** 2 + (iy + n / 2 - cy) ** 2 + (iz + n / 2 - cz) ** 2;
         if (d <= r2) found.push(ix, iy, iz, n, d);
       };
+      // A solid voxel with an empty face neighbour (the rest cannot be seen).
+      const exposed = (ix: number, iy: number, iz: number) =>
+        !solidAt(ix + 1, iy, iz) ||
+        !solidAt(ix - 1, iy, iz) ||
+        !solidAt(ix, iy + 1, iz) ||
+        !solidAt(ix, iy - 1, iz) ||
+        !solidAt(ix, iy, iz + 1) ||
+        !solidAt(ix, iy, iz - 1);
       // Squared distance from the centre to the cube of `n` voxels from (ox, oy, oz).
       const reach = (ox: number, oy: number, oz: number, n: number) => {
         const dx = Math.max(ox - cx, 0, cx - (ox + n));
@@ -208,14 +225,44 @@ export function parseVoxelGrid(metaJson: unknown, bin: ArrayBuffer): VoxelGrid {
           const x1 = Math.min(ox + n, Math.ceil(cx + r));
           const y1 = Math.min(oy + n, Math.ceil(cy + r));
           const z1 = Math.min(oz + n, Math.ceil(cz + r));
-          for (let i = x0; i < x1; i++) for (let j = y0; j < y1; j++) for (let k = z0; k < z1; k++) emit(i, j, k, 1);
+          for (let i = x0; i < x1; i++) {
+            for (let j = y0; j < y1; j++) {
+              // Inside a solid part only its outer shell can be exposed: skip to its far side.
+              const inner = surface && i > ox && i < ox + n - 1 && j > oy && j < oy + n - 1;
+              for (let k = z0; k < z1; k++) {
+                if (inner && k > oz && k < oz + n - 1) {
+                  k = oz + n - 2;
+                  continue;
+                }
+                if (!surface || exposed(i, j, k)) emit(i, j, k, 1);
+              }
+            }
+          }
           return;
         }
         if (level === 0) {
           const leaf = (word & 0xffffff) * 2;
+          const has = (bit: number) => (bit < 32 ? (leaves[leaf] >>> bit) & 1 : (leaves[leaf + 1] >>> (bit - 32)) & 1) === 1;
           for (let bit = 0; bit < 64; bit++) {
-            const solid = bit < 32 ? (leaves[leaf] >>> bit) & 1 : (leaves[leaf + 1] >>> (bit - 32)) & 1;
-            if (solid) emit(ox + (bit & 3), oy + ((bit >> 2) & 3), oz + ((bit >> 4) & 3), 1);
+            if (!has(bit)) continue;
+            const lx = bit & 3;
+            const ly = (bit >> 2) & 3;
+            const lz = (bit >> 4) & 3;
+            const ix = ox + lx;
+            const iy = oy + ly;
+            const iz = oz + lz;
+            if (surface) {
+              // Neighbours inside the block from its mask, the others from the tree.
+              const open =
+                (lx < 3 ? !has(bit + 1) : !solidAt(ix + 1, iy, iz)) ||
+                (lx > 0 ? !has(bit - 1) : !solidAt(ix - 1, iy, iz)) ||
+                (ly < 3 ? !has(bit + 4) : !solidAt(ix, iy + 1, iz)) ||
+                (ly > 0 ? !has(bit - 4) : !solidAt(ix, iy - 1, iz)) ||
+                (lz < 3 ? !has(bit + 16) : !solidAt(ix, iy, iz + 1)) ||
+                (lz > 0 ? !has(bit - 16) : !solidAt(ix, iy, iz - 1));
+              if (!open) continue;
+            }
+            emit(ix, iy, iz, 1);
           }
           return;
         }

@@ -191,7 +191,8 @@ export function setupVoxelOverlay(root: THREE.Object3D, onChange: () => void): V
       let farthest = 0;
       let count = 0;
       if (grid) {
-        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, VOXEL_DETAIL);
+        // Only the voxels on a surface: the front layer is all that shows.
+        const boxes = grid.boxesNear(center.x, center.y, center.z, range ?? VOXEL_RADIUS * grid.resolution, limit, VOXEL_DETAIL, true);
         mesh = new THREE.InstancedMesh(cube, material, Math.max(boxes.length, 1));
         mesh.count = boxes.length;
         // A little smaller than the voxel, so neighbours stay apart.
